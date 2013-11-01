@@ -2,7 +2,30 @@
 
 -- | A reimplementation of Data.IntMap that seems to be 1.4-4x faster.
 
-module Data.WordMap where
+module Data.WordMap (
+    -- * Map type
+      WordMap, Key
+    
+    -- * Query
+    , null
+    , size
+    , member
+    , notMember
+    , lookup
+    , findWithDefault
+    
+    -- * Construction
+    , empty
+    , singleton
+    
+    -- ** Insertion
+    , insert
+    , insertWith
+    , insertWithKey
+    
+    -- ** Delete\/Update
+    , delete
+) where
 
 import Control.DeepSeq
 import Control.Applicative hiding (empty)
