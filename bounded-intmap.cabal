@@ -1,0 +1,14 @@
+Name:          bounded-intmap
+Version:       0.1
+Description:   A reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes.
+Author:        Jonathan S
+License:       MIT
+License-File:  LICENSE
+Build-Type:    Simple
+Cabal-Version: >=1.8
+
+library
+    HS-Source-Dirs:  src
+    Build-Depends:   base, deepseq
+    Exposed-modules: Data.WordMap
+    ghc-options:     -Wall
