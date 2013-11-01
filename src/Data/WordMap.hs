@@ -48,10 +48,6 @@ bounds Empty = Nothing
 bounds (NonEmpty min (Tip _)) = Just (min, min)
 bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
 
-{-# INLINE lookupInt #-}
-lookupInt :: Int -> WordMap a -> Maybe a
-lookupInt = lookup . fromIntegral
-
 lookup :: Word -> WordMap a -> Maybe a
 lookup k = k `seq` start
   where
@@ -78,10 +74,6 @@ lookup k = k `seq` start
         | k < min = Nothing
         | ltMSB xorCache (xor min max) = goR xorCache max r
         | otherwise = startL min l
-
-{-# INLINE insertInt #-}
-insertInt :: Int -> a -> WordMap a -> WordMap a
-insertInt = insert . fromIntegral
 
 insert :: Word -> a -> WordMap a -> WordMap a
 insert !k v Empty = NonEmpty k (Tip v)
@@ -120,10 +112,6 @@ insert !k v (NonEmpty min node)
     endR !xorCache max (Bin min l r)
         | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
         | otherwise = Bin min l (endR xorCache max r)
-
-{-# INLINE deleteInt #-}
-deleteInt :: Int -> WordMap a -> WordMap a
-deleteInt = delete . fromIntegral
 
 delete :: Word -> WordMap a -> WordMap a
 delete k = k `seq` start
@@ -167,9 +155,6 @@ delete k = k `seq` start
     binRR min (Tip x) Empty = NonEmpty min (Tip x)
     binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
     binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
-
-fromListInt :: [(Int, a)] -> WordMap a
-fromListInt = foldr (uncurry insertInt) empty
 
 fromList :: [(Word, a)] -> WordMap a
 fromList = foldr (uncurry insert) empty

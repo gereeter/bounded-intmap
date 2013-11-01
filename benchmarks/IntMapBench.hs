@@ -6,15 +6,15 @@ import Control.Exception (evaluate)
 import Criterion.Main
 import Data.List (foldl')
 import qualified Data.IntMap as M
-import qualified Data.WordMap as W
+import qualified Data.IntMap.Bounded as W
 import Data.Maybe (fromMaybe)
 import Prelude hiding (lookup)
 
 main = do
     let denseM = M.fromAscList elems :: M.IntMap Int
-        denseW = W.fromListInt elems :: W.WordMap Int
+        denseW = W.fromList elems :: W.IntMap Int
         sparseM = M.fromAscList sElems :: M.IntMap Int
-        sparseW = W.fromListInt sElems :: W.WordMap Int
+        sparseW = W.fromList sElems :: W.IntMap Int
     evaluate $ rnf denseM
     evaluate $ rnf denseW
     evaluate $ rnf sparseM
@@ -24,29 +24,29 @@ main = do
         [ bgroup "present"
             [ bgroup "lookup"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 keys) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookupInt k m)) 0 keys) denseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 keys) denseW
                 ]
             , bgroup "insert"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insertInt k v m) m elems) denseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m elems) denseW
                 ]
             , bgroup "delete"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.deleteInt k m) m keys) denseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m keys) denseW
                 ]
             ]
         , bgroup "absent"
             [ bgroup "lookup"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 sKeysSearch) sparseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookupInt k m)) 0 sKeysSearch) sparseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 sKeysSearch) sparseW
                 ]
             , bgroup "insert"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m sElemsSearch) sparseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insertInt k v m) m sElemsSearch) sparseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m sElemsSearch) sparseW
                 ]
             , bgroup "delete"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m sKeysSearch) sparseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.deleteInt k m) m sKeysSearch) sparseW
+                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m sKeysSearch) sparseW
                 ]
             ]
         ]
