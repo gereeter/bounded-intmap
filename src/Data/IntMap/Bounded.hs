@@ -27,7 +27,7 @@ delete :: Key -> IntMap a -> IntMap a
 delete k (IntMap m) = IntMap (W.delete (fromIntegral k) m)
 
 fromList :: [(Int, a)] -> IntMap a
-fromList = W.fromList . map (\(k, v) -> (fromIntegral k, v))
+fromList = IntMap . W.fromList . map (\(k, v) -> (fromIntegral k, v))
 
 toList :: IntMap a -> [(Int, a)]
 toList (IntMap m) = map (\(k, v) -> (fromIntegral k, v)) (W.toList m)
