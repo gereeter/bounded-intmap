@@ -5,16 +5,24 @@
 module Data.WordMap where
 
 import Control.DeepSeq
+import Control.Applicative hiding (empty)
+
+import Data.Monoid
+import Data.Foldable hiding (toList)
+import Data.Traversable
 
 import Data.Word (Word)
 import Data.Bits (xor)
 
-import Prelude hiding (lookup)
+import Prelude hiding (foldr, lookup)
 
 type Key = Word
 
-data WordMap a = Empty | NonEmpty {-# UNPACK #-} !Key !(Node a) deriving (Show)
-data Node a = Tip a | Bin {-# UNPACK #-} !Key !(Node a) !(Node a) deriving (Show)
+data WordMap a = Empty | NonEmpty {-# UNPACK #-} !Key !(Node a) deriving (Eq)
+data Node a = Tip a | Bin {-# UNPACK #-} !Key !(Node a) !(Node a) deriving (Eq, Show)
+
+instance Show a => Show (WordMap a) where
+    show m = "fromList " ++ show (toList m)
 
 instance Functor WordMap where
     fmap f Empty = Empty
@@ -23,6 +31,22 @@ instance Functor WordMap where
 instance Functor Node where
     fmap f (Tip x) = Tip (f x)
     fmap f (Bin bound l r) = Bin bound (fmap f l) (fmap f r)
+
+instance Foldable WordMap where
+    foldMap f Empty = mempty
+    foldMap f (NonEmpty _ node) = foldMap f node
+
+instance Foldable Node where
+    foldMap f (Tip x) = f x
+    foldMap f (Bin _ l r) = foldMap f l `mappend` foldMap f r
+
+instance Traversable WordMap where
+    traverse f Empty = pure Empty
+    traverse f (NonEmpty min node) = NonEmpty min <$> traverse f node
+
+instance Traversable Node where
+    traverse f (Tip x) = Tip <$> f x
+    traverse f (Bin bound l r) = Bin bound <$> traverse f l <*> traverse f r
 
 instance NFData a => NFData (WordMap a) where
     rnf Empty = ()
