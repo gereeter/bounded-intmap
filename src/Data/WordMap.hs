@@ -30,24 +30,29 @@ instance NFData a => NFData (Node a) where
     rnf (Tip x) = rnf x
     rnf (Bin _ l r) = rnf l `seq` rnf r
 
+-- | /O(1)/. The empty map.
 empty :: WordMap a
 empty = Empty
 
+-- | /O(1)/. Is the map empty?
 null :: WordMap a -> Bool
 null Empty = True
 null _ = False
 
+-- | /O(n)/. Number of elements in the map.
 size :: WordMap a -> Int
 size Empty = 0
 size (NonEmpty _ node) = sizeNode node where
     sizeNode (Tip _) = 1
     sizeNode (Bin _ l r) = sizeNode l + sizeNode r
 
+-- | /O(1)/. Find the largest and smallest key in the map.
 bounds :: WordMap a -> Maybe (Word, Word)
 bounds Empty = Nothing
 bounds (NonEmpty min (Tip _)) = Just (min, min)
 bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
 
+-- | /O(min(n,W))/. Lookup the value at a key in the map.
 lookup :: Word -> WordMap a -> Maybe a
 lookup k = k `seq` start
   where
@@ -75,6 +80,9 @@ lookup k = k `seq` start
         | ltMSB xorCache (xor min max) = goR xorCache max r
         | otherwise = startL min l
 
+-- | /O(min(n,W))/. Insert a new key\/value pair in the map.
+-- If the key is already present in the map, the associated value
+-- is replaced with the supplied value. 
 insert :: Word -> a -> WordMap a -> WordMap a
 insert !k v Empty = NonEmpty k (Tip v)
 insert !k v (NonEmpty min node)
@@ -113,6 +121,8 @@ insert !k v (NonEmpty min node)
         | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
         | otherwise = Bin min l (endR xorCache max r)
 
+-- | /O(min(n,W))/. Delete a key and its value from the map.
+-- When the key is not a member of the map, the original map is returned.
 delete :: Word -> WordMap a -> WordMap a
 delete k = k `seq` start
   where
@@ -156,9 +166,11 @@ delete k = k `seq` start
     binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
     binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
 
+-- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Word, a)] -> WordMap a
 fromList = foldr (uncurry insert) empty
 
+-- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Word, a)]
 toList Empty = []
 toList (NonEmpty min node) = goL min node [] where
@@ -170,6 +182,7 @@ toList (NonEmpty min node) = goL min node [] where
 
 ----------------------------
 
+-- | Show the tree that implements the map.
 showTree :: Show a => WordMap a -> String
 showTree = unlines . aux where
     aux Empty = []
@@ -180,6 +193,9 @@ showTree = unlines . aux where
         prefix = if lined then '|' else ' '
         indent r = prefix : "  " ++ r
 
+-- | /O(1)/. Returns whether the most significant bit of its first
+-- argument is less significant than the most significant bit of its
+-- second argument.
 {-# INLINE ltMSB #-}
 ltMSB :: Word -> Word -> Bool
 ltMSB x y = x < y && x < xor x y
