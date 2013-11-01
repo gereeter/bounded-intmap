@@ -6,7 +6,7 @@ module Data.IntMap.Bounded where
 
 import Control.DeepSeq
 
-import Data.WordMap as W
+import qualified Data.WordMap as W
 
 type Key = Int
 newtype IntMap a = IntMap (W.WordMap a)

@@ -11,8 +11,10 @@ import Data.Bits (xor)
 
 import Prelude hiding (lookup)
 
-data WordMap a = Empty | NonEmpty {-# UNPACK #-} !Word !(Node a) deriving (Show)
-data Node a = Tip a | Bin {-# UNPACK #-} !Word !(Node a) !(Node a) deriving (Show)
+type Key = Word
+
+data WordMap a = Empty | NonEmpty {-# UNPACK #-} !Key !(Node a) deriving (Show)
+data Node a = Tip a | Bin {-# UNPACK #-} !Key !(Node a) !(Node a) deriving (Show)
 
 instance Functor WordMap where
     fmap f Empty = Empty
@@ -46,14 +48,14 @@ size (NonEmpty _ node) = sizeNode node where
     sizeNode (Tip _) = 1
     sizeNode (Bin _ l r) = sizeNode l + sizeNode r
 
--- | /O(1)/. Find the largest and smallest key in the map.
-bounds :: WordMap a -> Maybe (Word, Word)
+-- | /O(1)/. Find the smallest and largest key in the map.
+bounds :: WordMap a -> Maybe (Key, Key)
 bounds Empty = Nothing
 bounds (NonEmpty min (Tip _)) = Just (min, min)
 bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
 
 -- | /O(min(n,W))/. Lookup the value at a key in the map.
-lookup :: Word -> WordMap a -> Maybe a
+lookup :: Key -> WordMap a -> Maybe a
 lookup k = k `seq` start
   where
     start Empty = Nothing
@@ -83,7 +85,7 @@ lookup k = k `seq` start
 -- | /O(min(n,W))/. Insert a new key\/value pair in the map.
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value. 
-insert :: Word -> a -> WordMap a -> WordMap a
+insert :: Key -> a -> WordMap a -> WordMap a
 insert !k v Empty = NonEmpty k (Tip v)
 insert !k v (NonEmpty min node)
     | k < min = NonEmpty k (finishL min node)
@@ -123,7 +125,7 @@ insert !k v (NonEmpty min node)
 
 -- | /O(min(n,W))/. Delete a key and its value from the map.
 -- When the key is not a member of the map, the original map is returned.
-delete :: Word -> WordMap a -> WordMap a
+delete :: Key -> WordMap a -> WordMap a
 delete k = k `seq` start
   where
     start Empty = Empty
@@ -167,11 +169,11 @@ delete k = k `seq` start
     binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
-fromList :: [(Word, a)] -> WordMap a
+fromList :: [(Key, a)] -> WordMap a
 fromList = foldr (uncurry insert) empty
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
-toList :: WordMap a -> [(Word, a)]
+toList :: WordMap a -> [(Key, a)]
 toList Empty = []
 toList (NonEmpty min node) = goL min node [] where
     goL min (Tip x) rest = (min, x) : rest
