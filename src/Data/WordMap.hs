@@ -56,10 +56,6 @@ instance NFData a => NFData (Node a) where
     rnf (Tip x) = rnf x
     rnf (Bin _ l r) = rnf l `seq` rnf r
 
--- | /O(1)/. The empty map.
-empty :: WordMap a
-empty = Empty
-
 -- | /O(1)/. Is the map empty?
 null :: WordMap a -> Bool
 null Empty = True
@@ -77,6 +73,60 @@ bounds :: WordMap a -> Maybe (Key, Key)
 bounds Empty = Nothing
 bounds (NonEmpty min (Tip _)) = Just (min, min)
 bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
+
+-- | /O(min(n,W))/. Is the key a member of the map?
+member :: Key -> WordMap a -> Bool
+member k = k `seq` start
+  where
+    start Empty = False
+    start (NonEmpty min node)
+        | k < min = False
+        | k == min = True
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x) = False
+    goL !xorCache min (Bin max l r)
+        | k > max = False
+        | k == max = True
+        | ltMSB xorCache (xor min max) = startR max r
+        | otherwise = goL xorCache min l
+    
+    goR !xorCache max (Tip x) = False
+    goR !xorCache max (Bin min l r)
+        | k < min = False
+        | k == min = True
+        | ltMSB xorCache (xor min max) = goR xorCache max r
+        | otherwise = startL min l
+
+-- | /O(min(n,W))/. Is the key not a member of the map?
+notMember :: Key -> WordMap a -> Bool
+notMember k = k `seq` start
+  where
+    start Empty = True
+    start (NonEmpty min node)
+        | k < min = True
+        | k == min = False
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x) = True
+    goL !xorCache min (Bin max l r)
+        | k > max = True
+        | k == max = False
+        | ltMSB xorCache (xor min max) = startR max r
+        | otherwise = goL xorCache min l
+    
+    goR !xorCache max (Tip x) = True
+    goR !xorCache max (Bin min l r)
+        | k < min = True
+        | k == min = False
+        | ltMSB xorCache (xor min max) = goR xorCache max r
+        | otherwise = startL min l
 
 -- | /O(min(n,W))/. Lookup the value at a key in the map.
 lookup :: Key -> WordMap a -> Maybe a
@@ -106,12 +156,62 @@ lookup k = k `seq` start
         | ltMSB xorCache (xor min max) = goR xorCache max r
         | otherwise = startL min l
 
+-- | /O(min(n,W))/. The expression @findWithDefault def k map@ returns
+-- the value at key @k@ or returns @def@ when the key is not an element
+-- of the map. 
+findWithDefault :: a -> Key -> WordMap a -> a
+findWithDefault def k = k `seq` start
+  where
+    start Empty = def
+    start (NonEmpty min node)
+        | k < min = def
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x)
+        | k == min = x
+        | otherwise = def
+    goL !xorCache min (Bin max l r)
+        | k > max = def
+        | ltMSB xorCache (xor min max) = startR max r
+        | otherwise = goL xorCache min l
+    
+    goR !xorCache max (Tip x)
+        | k == max = x
+        | otherwise = def
+    goR !xorCache max (Bin min l r)
+        | k < min = def
+        | ltMSB xorCache (xor min max) = goR xorCache max r
+        | otherwise = startL min l
+
+-- | /O(1)/. The empty map.
+empty :: WordMap a
+empty = Empty
+
+-- | /O(1)/. A map of one element.
+singleton :: Key -> a -> WordMap a
+singleton k v = NonEmpty k (Tip v)
+
 -- | /O(min(n,W))/. Insert a new key\/value pair in the map.
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value. 
 insert :: Key -> a -> WordMap a -> WordMap a
-insert !k v Empty = NonEmpty k (Tip v)
-insert !k v (NonEmpty min node)
+insert = insertWith const
+
+-- | /O(min(n,W))/. Insert with a combining function.
+-- @'insertWith' f key value mp@
+-- will insert the pair (key, value) into @mp@ if key does
+-- not exist in the map. If the key does exist, the function will
+-- insert @f new_value old_value@.
+--
+-- > insertWith (++) 5 "xxx" (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "xxxa")]
+-- > insertWith (++) 7 "xxx" (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a"), (7, "xxx")]
+-- > insertWith (++) 5 "xxx" empty                         == singleton 5 "xxx"
+insertWith :: (a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
+insertWith combine !k v Empty = NonEmpty k (Tip v)
+insertWith combine !k v (NonEmpty min node)
     | k < min = NonEmpty k (finishL min node)
     | otherwise = NonEmpty min (startL min node)
   where
@@ -119,7 +219,7 @@ insert !k v (NonEmpty min node)
     startR max = goR (xor k max) max
     
     goL !xorCache min (Tip x)
-        | k == min = Tip v
+        | k == min = Tip (combine v x)
         | otherwise = Bin k (Tip x) (Tip v)
     goL !xorCache min (Bin max l r)
         | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR max r)
@@ -127,7 +227,7 @@ insert !k v (NonEmpty min node)
         | otherwise = Bin max (goL xorCache min l) r
 
     goR !xorCache max (Tip x)
-        | k == max = Tip v
+        | k == max = Tip (combine v x)
         | otherwise = Bin k (Tip v) (Tip x)
     goR !xorCache max (Bin min l r)
         | k < min = if ltMSB (xor min max) xorCache then Bin k (Tip v) (Bin min l r) else Bin k (finishL min l) r
@@ -146,6 +246,19 @@ insert !k v (NonEmpty min node)
     endR !xorCache max (Bin min l r)
         | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
         | otherwise = Bin min l (endR xorCache max r)
+
+-- | /O(min(n,W))/. Insert with a combining function.
+-- @'insertWithKey' f key value mp@
+-- will insert the pair (key, value) into @mp@ if key does
+-- not exist in the map. If the key does exist, the function will
+-- insert @f key new_value old_value@.
+--
+-- > let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+-- > insertWithKey f 5 "xxx" (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "5:xxx|a")]
+-- > insertWithKey f 7 "xxx" (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a"), (7, "xxx")]
+-- > insertWithKey f 5 "xxx" empty                         == singleton 5 "xxx"
+insertWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
+insertWithKey f k = insertWith (f k) k
 
 -- | /O(min(n,W))/. Delete a key and its value from the map.
 -- When the key is not a member of the map, the original map is returned.
