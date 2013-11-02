@@ -34,6 +34,11 @@ module Data.WordMap (
     , unionWith
     , unionWithKey
     
+    -- ** Intersection
+    , intersection
+    , intersectionWith
+    , intersectionWithKey
+    
     -- * Conversions
     , toList
     , fromList
@@ -453,6 +458,114 @@ unionWithKey combine (NonEmpty min1 node1) (NonEmpty min2 node2) = NonEmpty (Pre
     endR k v !xorCache max (Bin min l r)
         | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
         | otherwise = Bin min l (endR k v xorCache max r)
+
+-- | /O(n+m)/. The (left-biased) intersection of two maps (based on keys).
+--
+-- > intersection (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "a"
+intersection :: WordMap a -> WordMap b -> WordMap a
+intersection = intersectionWith const
+
+-- | /O(n+m)/. The intersection with a combining function.
+--
+-- > intersectionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "aA"
+intersectionWith :: (a -> b -> c) -> WordMap a -> WordMap b -> WordMap c
+intersectionWith f = intersectionWithKey (const f)
+
+-- | /O(n+m)/. The intersection with a combining function.
+--
+-- > let f k al ar = (show k) ++ ":" ++ al ++ "|" ++ ar
+-- > intersectionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "5:a|A"
+intersectionWithKey :: (Key -> a -> b -> c) -> WordMap a -> WordMap b -> WordMap c
+intersectionWithKey _ Empty _ = Empty
+intersectionWithKey _ _ Empty = Empty
+intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL min1 root1 min2 root2
+  where
+    goL min1 (Tip x1) min2 (Tip x2)
+        | min1 == min2 = NonEmpty min1 (Tip (combine min1 x1 x2))
+        | otherwise = Empty
+    goL min1 (Tip x1) min2 node2
+        | min1 < min2 = Empty
+        | otherwise = finishLL min1 x1 min2 node2
+    goL min1 node1 min2 (Tip x2)
+        | min2 < min1 = Empty
+        | otherwise = finishLR min2 x2 min1 node1
+    goL min1 (Bin max1 l1 r1) min2 (Bin max2 l2 r2)
+        | max1 < min2 || max2 < min1 = Empty
+        | otherwise = case compareMSB (xor min1 max1) (xor min2 max2) of
+            LT | ltMSB (xor min1 max2) (xor min2 max2) -> flipBounds $ goR max1 (Bin min1 l1 r1) max2 r2
+               | otherwise -> goL min1 (Bin max1 l1 r1) min2 l2
+            EQ -> binL (goL min1 l1 min2 l2) (goR max1 r1 max2 r2)
+            GT | ltMSB (xor min2 max1) (xor min1 max1) -> flipBounds $ goR max1 r1 max2 (Bin min2 l2 r2)
+               | otherwise -> goL min1 l1 min2 (Bin max2 l2 r2)
+    
+    goR max1 (Tip x1) max2 (Tip x2)
+        | max1 == max2 = NonEmpty max1 (Tip (combine max1 x1 x2))
+        | otherwise = Empty
+    goR max1 (Tip x1) max2 node2
+        | max1 > max2 = Empty
+        | otherwise = finishRL max1 x1 max2 node2
+    goR max1 node1 max2 (Tip x2)
+        | max2 > max1 = Empty
+        | otherwise = finishRR max2 x2 max1 node1
+    goR max1 (Bin min1 l1 r1) max2 (Bin min2 l2 r2)
+        | max1 < min2 || max2 < min1 = Empty
+        | otherwise = case compareMSB (xor min1 max1) (xor min2 max2) of
+            LT | ltMSB (xor min1 max2) (xor min2 max2) -> goR max1 (Bin min1 l1 r1) max2 r2
+               | otherwise -> flipBounds $ goL min1 (Bin max1 l1 r1) min2 l2
+            EQ -> binR (goL min1 l1 min2 l2) (goR max1 r1 max2 r2)
+            GT | ltMSB (xor min2 max1) (xor min1 max1) -> goR max1 r1 max2 (Bin min2 l2 r2)
+               | otherwise -> flipBounds $ goL min1 l1 min2 (Bin max2 l2 r2)
+    
+    binL Empty Empty = Empty
+    binL Empty r = flipBounds r
+    binL l Empty = l
+    binL (NonEmpty min l) (NonEmpty max r) = NonEmpty min (Bin max l r)
+    
+    binR Empty Empty = Empty
+    binR Empty r = r
+    binR l Empty = flipBounds l
+    binR (NonEmpty min l) (NonEmpty max r) = NonEmpty max (Bin min l r)
+    
+    flipBounds Empty = Empty
+    flipBounds n@(NonEmpty b1 (Tip x)) = n
+    flipBounds (NonEmpty b1 (Bin b2 l r)) = NonEmpty b2 (Bin b1 l r)
+    
+    finishLL k v min = endLL k v (xor k min) min
+    finishRL k v max = endRL k v (xor k max) max
+    finishLR k v min = endLR k v (xor k min) min
+    finishRR k v max = endRR k v (xor k max) max
+    
+    endLL k v !xorCache min (Tip x)
+        | k == min = NonEmpty k (Tip (combine k v x))
+        | otherwise = Empty
+    endLL k v !xorCache min (Bin max l r)
+        | k > max = Empty
+        | ltMSB xorCache (xor min max) = finishRL k v max r
+        | otherwise = endLL k v xorCache min l
+    
+    endRL k v !xorCache max (Tip x)
+        | k == max = NonEmpty k (Tip (combine k v x))
+        | otherwise = Empty
+    endRL k v !xorCache max (Bin min l r)
+        | k < min = Empty
+        | ltMSB xorCache (xor min max) = endRL k v xorCache max r
+        | otherwise = finishLL k v min l
+    
+    endLR k v !xorCache min (Tip x)
+        | k == min = NonEmpty k (Tip (combine k x v))
+        | otherwise = Empty
+    endLR k v !xorCache min (Bin max l r)
+        | k > max = Empty
+        | ltMSB xorCache (xor min max) = finishRR k v max r
+        | otherwise = endLR k v xorCache min l
+    
+    endRR k v !xorCache max (Tip x)
+        | k == max = NonEmpty k (Tip (combine k x v))
+        | otherwise = Empty
+    endRR k v !xorCache max (Bin min l r)
+        | k < min = Empty
+        | ltMSB xorCache (xor min max) = endRR k v xorCache max r
+        | otherwise = finishLR k v min l
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
