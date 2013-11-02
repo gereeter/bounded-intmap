@@ -469,6 +469,115 @@ delete k = k `seq` start
     binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
     binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
 
+-- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
+-- a member of the map, the original map is returned.
+--
+-- > adjust ("new " ++) 5 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "new a")]
+-- > adjust ("new " ++) 7 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a")]
+-- > adjust ("new " ++) 7 empty                         == empty
+adjust :: (a -> a) -> Key -> WordMap a -> WordMap a
+adjust f k = k `seq` start
+  where
+    start Empty = Empty
+    start m@(NonEmpty min node)
+        | k < min = m
+        | otherwise = NonEmpty min (startL min node)
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min n@(Tip x)
+        | k == min = Tip (f x)
+        | otherwise = n
+    goL !xorCache min n@(Bin max l r)
+        | k > max = n
+        | ltMSB xorCache (xor min max) = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (startR max r)
+    
+    goR !xorCache max n@(Tip x)
+        | k == max = Tip (f x)
+        | otherwise = n
+    goR !xorCache max n@(Bin min l r)
+        | k < min = n
+        | ltMSB xorCache (xor min max) = Bin min l (goR xorCache max r)
+        | otherwise = Bin min (startL min l) r
+
+-- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
+-- a member of the map, the original map is returned.
+--
+-- > let f key x = (show key) ++ ":new " ++ x
+-- > adjustWithKey f 5 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "5:new a")]
+-- > adjustWithKey f 7 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a")]
+-- > adjustWithKey f 7 empty                         == empty
+adjustWithKey :: (Key -> a -> a) -> Key -> WordMap a -> WordMap a
+adjustWithKey f k = adjust (f k) k
+
+-- | /O(min(n,W))/. The expression (@'update' f k map@) updates the value @x@
+-- at @k@ (if it is in the map). If (@f x@) is 'Nothing', the element is
+-- deleted. If it is (@'Just' y@), the key @k@ is bound to the new value @y@.
+--
+-- > let f x = if x == "a" then Just "new a" else Nothing
+-- > update f 5 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "new a")]
+-- > update f 7 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a")]
+-- > update f 3 (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
+update :: (a -> Maybe a) -> Key -> WordMap a -> WordMap a
+update f k = k `seq` start
+  where
+    start Empty = Empty
+    start m@(NonEmpty min node)
+        | k < min = m
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x)
+        | k == min = case f x of
+            Nothing -> Empty
+            Just x' -> NonEmpty min (Tip x')
+        | otherwise = NonEmpty min (Tip x)
+    goL !xorCache min n@(Bin max l r)
+        | k > max = NonEmpty min n
+        | ltMSB xorCache (xor min max) = binLL max (goL xorCache min l) r
+        | otherwise = binRL min l (startR max r)
+    
+    goR !xorCache max (Tip x)
+        | k == max = case f x of
+            Nothing -> Empty
+            Just x' -> NonEmpty max (Tip x')
+        | otherwise = NonEmpty max (Tip x)
+    goR !xorCache max n@(Bin min l r)
+        | k < min = NonEmpty max n
+        | ltMSB xorCache (xor min max) = binRR min l (goR xorCache max r)
+        | otherwise = binLR max (startL min l) r
+    
+    binLL max Empty (Tip x) = NonEmpty max (Tip x)
+    binLL max Empty (Bin min l r) = NonEmpty min (Bin max l r)
+    binLL max (NonEmpty min l) r = NonEmpty min (Bin max l r)
+    
+    binLR max Empty (Tip x) = NonEmpty max (Tip x)
+    binLR max Empty (Bin min l r) = NonEmpty max (Bin min l r)
+    binLR max (NonEmpty min l) r = NonEmpty max (Bin min l r)
+    
+    binRL min (Tip x) Empty = NonEmpty min (Tip x)
+    binRL min (Bin max l r) Empty = NonEmpty min (Bin max l r)
+    binRL min l (NonEmpty max r) = NonEmpty min (Bin max l r)
+    
+    binRR min (Tip x) Empty = NonEmpty min (Tip x)
+    binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
+    binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
+
+-- | /O(min(n,W))/. The expression (@'updateWithKey' f k map@) updates the value @x@
+-- at @k@ (if it is in the map). If (@f k x@) is 'Nothing', the element is
+-- deleted. If it is (@'Just' y@), the key @k@ is bound to the new value @y@.
+--
+-- > let f k x = if x == "a" then Just ((show k) ++ ":new a") else Nothing
+-- > updateWithKey f 5 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "5:new a")]
+-- > updateWithKey f 7 (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a")]
+-- > updateWithKey f 3 (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
+updateWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> WordMap a
+updateWithKey f k = update (f k) k
+
 -- | /O(n+m)/. The (left-biased) union of two maps.
 -- It prefers the first map when duplicate keys are encountered,
 -- i.e. (@'union' == 'unionWith' 'const'@).
