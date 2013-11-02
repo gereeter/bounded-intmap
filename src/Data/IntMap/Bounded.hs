@@ -32,6 +32,11 @@ module Data.IntMap.Bounded (
     , unionWith
     , unionWithKey
     
+    -- ** Intersection
+    , intersection
+    , intersectionWith
+    , intersectionWithKey
+    
     -- * Conversions
     , toList
     , fromList
@@ -104,6 +109,16 @@ unionWith f (IntMap m1) (IntMap m2) = IntMap (W.unionWith f m1 m2)
 
 unionWithKey :: (Key -> a -> a -> a) -> IntMap a -> IntMap a -> IntMap a
 unionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.unionWithKey f' m1 m2) where
+    f' k = f (fromIntegral k)
+
+intersection :: IntMap a -> IntMap b -> IntMap a
+intersection (IntMap m1) (IntMap m2) = IntMap (W.intersection m1 m2)
+
+intersectionWith :: (a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
+intersectionWith f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWith f m1 m2)
+
+intersectionWithKey :: (Key -> a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
+intersectionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithKey f' m1 m2) where
     f' k = f (fromIntegral k)
 
 toList :: IntMap a -> [(Int, a)]
