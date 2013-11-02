@@ -15,6 +15,10 @@ module Data.WordMap (
     , notMember
     , lookup
     , findWithDefault
+    , lookupLT
+    , lookupGT
+    , lookupLE
+    , lookupGE
     
     -- * Construction
     , empty

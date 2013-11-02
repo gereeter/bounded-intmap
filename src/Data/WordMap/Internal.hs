@@ -194,6 +194,162 @@ findWithDefault def k = k `seq` start
         | ltMSB xorCache (xor min max) = goR xorCache max r
         | otherwise = startL min l
 
+-- | /O(log n)/. Find largest key smaller than the given one and return the
+-- corresponding (key, value) pair.
+--
+-- > lookupLT 3 (fromList [(3,'a'), (5,'b')]) == Nothing
+-- > lookupLT 4 (fromList [(3,'a'), (5,'b')]) == Just (3, 'a')
+lookupLT :: Key -> WordMap a -> Maybe (Key, a)
+lookupLT k = k `seq` start
+  where
+    start Empty = Nothing
+    start (NonEmpty min node)
+        | min >= k = Nothing
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x)
+        | min < k = Just (min, x)
+        | otherwise = Nothing
+    goL !xorCache min (Bin max l r)
+        | max < k = Just (max, getMaxV r)
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r min l
+    
+    goR !xorCache max (Tip x) fMin fallback
+        | max < k = Just (max, x)
+        | otherwise = Just (getMax fMin fallback)
+    goR !xorCache max (Bin min l r) fMin fallback
+        | min >= k = Just (getMax fMin fallback)
+        | ltMSB xorCache (xor min max) = goR xorCache max r min l
+        | otherwise = startL min l
+    
+    getMax min (Tip x) = (min, x)
+    getMax min (Bin max l r) = (max, getMaxV r)
+    
+    getMaxV (Tip x) = x
+    getMaxV (Bin b l r) = getMaxV r
+
+-- | /O(log n)/. Find largest key smaller or equal to the given one and return
+-- the corresponding (key, value) pair.
+--
+-- > lookupLE 2 (fromList [(3,'a'), (5,'b')]) == Nothing
+-- > lookupLE 4 (fromList [(3,'a'), (5,'b')]) == Just (3, 'a')
+-- > lookupLE 5 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
+lookupLE :: Key -> WordMap a -> Maybe (Key, a)
+lookupLE k = k `seq` start
+  where
+    start Empty = Nothing
+    start (NonEmpty min node)
+        | min > k = Nothing
+        | otherwise = startL min node
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x)
+        | min <= k = Just (min, x)
+        | otherwise = Nothing
+    goL !xorCache min (Bin max l r)
+        | max <= k = Just (max, getMaxV r)
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r min l
+    
+    goR !xorCache max (Tip x) fMin fallback
+        | max <= k = Just (max, x)
+        | otherwise = Just (getMax fMin fallback)
+    goR !xorCache max (Bin min l r) fMin fallback
+        | min > k = Just (getMax fMin fallback)
+        | ltMSB xorCache (xor min max) = goR xorCache max r min l
+        | otherwise = startL min l
+    
+    getMax min (Tip x) = (min, x)
+    getMax min (Bin max l r) = (max, getMaxV r)
+    
+    getMaxV (Tip x) = x
+    getMaxV (Bin b l r) = getMaxV r
+
+-- | /O(log n)/. Find smallest key greater than the given one and return the
+-- corresponding (key, value) pair.
+--
+-- > lookupGT 4 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
+-- > lookupGT 5 (fromList [(3,'a'), (5,'b')]) == Nothing
+lookupGT :: Key -> WordMap a -> Maybe (Key, a)
+lookupGT k = k `seq` start
+  where
+    start Empty = Nothing
+    start (NonEmpty min (Tip x)) = Just (min, x)
+    start (NonEmpty min (Bin max l r))
+        | max <= k = Nothing
+        | otherwise = startR max (Bin min l r)
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x) fMax fallback
+        | min > k = Just (min, x)
+        | otherwise = Just (getMin fMax fallback)
+    goL !xorCache min (Bin max l r) fMax fallback
+        | max <= k = Just (getMin fMax fallback)
+        | ltMSB xorCache (xor min max) = goL xorCache min l max r
+        | otherwise = startR max r
+    
+    goR !xorCache max (Tip x)
+        | max > k = Just (max, x)
+        | otherwise = Nothing
+    goR !xorCache max (Bin min l r)
+        | min > k = Just (min, getMinV l)
+        | ltMSB xorCache (xor min max) = goR xorCache max r
+        | otherwise = startL min l max r
+    
+    getMin max (Tip x) = (max, x)
+    getMin max (Bin min l r) = (min, getMinV l)
+    
+    getMinV (Tip x) = x
+    getMinV (Bin b l r) = getMinV l
+
+-- | /O(log n)/. Find smallest key greater or equal to the given one and return
+-- the corresponding (key, value) pair.
+--
+-- > lookupGE 3 (fromList [(3,'a'), (5,'b')]) == Just (3, 'a')
+-- > lookupGE 4 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
+-- > lookupGE 6 (fromList [(3,'a'), (5,'b')]) == Nothing
+lookupGE :: Key -> WordMap a -> Maybe (Key, a)
+lookupGE k = k `seq` start
+  where
+    start Empty = Nothing
+    start (NonEmpty min (Tip x)) = Just (min, x)
+    start (NonEmpty min (Bin max l r))
+        | max < k = Nothing
+        | otherwise = startR max (Bin min l r)
+    
+    startL min = goL (xor k min) min
+    startR max = goR (xor k max) max
+    
+    goL !xorCache min (Tip x) fMax fallback
+        | min >= k = Just (min, x)
+        | otherwise = Just (getMin fMax fallback)
+    goL !xorCache min (Bin max l r) fMax fallback
+        | max < k = Just (getMin fMax fallback)
+        | ltMSB xorCache (xor min max) = goL xorCache min l max r
+        | otherwise = startR max r
+    
+    goR !xorCache max (Tip x)
+        | max >= k = Just (max, x)
+        | otherwise = Nothing
+    goR !xorCache max (Bin min l r)
+        | min >= k = Just (min, getMinV l)
+        | ltMSB xorCache (xor min max) = goR xorCache max r
+        | otherwise = startL min l max r
+    
+    getMin max (Tip x) = (max, x)
+    getMin max (Bin min l r) = (min, getMinV l)
+    
+    getMinV (Tip x) = x
+    getMinV (Bin b l r) = getMinV l
+    
 -- | /O(1)/. The empty map.
 empty :: WordMap a
 empty = Empty
