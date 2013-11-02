@@ -47,6 +47,15 @@ module Data.WordMap (
     , intersectionWith
     , intersectionWithKey
     
+    -- * Traversal
+    -- ** Map
+    , map
+    , mapWithKey
+    , traverseWithKey
+    , mapAccum
+    , mapAccumWithKey
+    , mapAccumRWithKey
+    
     -- * Conversions
     , toList
     , fromList
@@ -58,4 +67,4 @@ module Data.WordMap (
 
 import Data.WordMap.Internal
 
-import Prelude hiding (lookup, null)
+import Prelude hiding (lookup, null, map)

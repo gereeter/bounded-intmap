@@ -16,7 +16,7 @@ import Data.Traversable
 import Data.Word (Word)
 import Data.Bits (xor, (.|.))
 
-import Prelude hiding (foldr, lookup, null)
+import Prelude hiding (foldr, lookup, null, map)
 
 type Key = Word
 
@@ -795,6 +795,99 @@ intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL mi
         | ltMSB xorCache (xor min max) = endRR k v xorCache max r
         | otherwise = finishLR k v min l
 
+-- | /O(n)/. Map a function over all values in the map.
+--
+-- > map (++ "x") (fromList [(5,"a"), (3,"b")]) == fromList [(3, "bx"), (5, "ax")]
+map :: (a -> b) -> WordMap a -> WordMap b
+map = fmap
+
+-- | /O(n)/. Map a function over all values in the map.
+--
+-- > let f key x = (show key) ++ ":" ++ x
+-- > mapWithKey f (fromList [(5,"a"), (3,"b")]) == fromList [(3, "3:b"), (5, "5:a")]
+mapWithKey :: (Key -> a -> b) -> WordMap a -> WordMap b
+mapWithKey f Empty = Empty
+mapWithKey f (NonEmpty min root) = NonEmpty min (goL min root)
+  where
+    goL min (Tip x) = Tip (f min x)
+    goL min (Bin max l r) = Bin max (goL min l) (goR max r)
+    
+    goR max (Tip x) = Tip (f max x)
+    goR max (Bin min l r) = Bin min (goL min l) (goR max r)
+
+
+-- | /O(n)/.
+-- @'traverseWithKey' f s == 'fromList' <$> 'traverse' (\(k, v) -> (,) k <$> f k v) ('toList' m)@
+-- That is, behaves exactly like a regular 'traverse' except that the traversing
+-- function also has access to the key associated with a value.
+--
+-- > traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(1, 'a'), (5, 'e')]) == Just (fromList [(1, 'b'), (5, 'f')])
+-- > traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(2, 'c')])           == Nothing
+traverseWithKey :: Applicative f => (Key -> a -> f b) -> WordMap a -> f (WordMap b)
+traverseWithKey f Empty = pure Empty
+traverseWithKey f (NonEmpty min root) = NonEmpty min <$> goL min root
+  where
+    goL min (Tip x) = Tip <$> f min x
+    goL min (Bin max l r) = Bin max <$> goL min l <*> goR max r
+    
+    goR max (Tip x) = Tip <$> f max x
+    goR max (Bin min l r) = Bin max <$> goL min l <*> goR max r
+
+-- | /O(n)/. The function @'mapAccum'@ threads an accumulating
+-- argument through the map in ascending order of keys.
+--
+-- > let f a b = (a ++ b, b ++ "X")
+-- > mapAccum f "Everything: " (fromList [(5,"a"), (3,"b")]) == ("Everything: ba", fromList [(3, "bX"), (5, "aX")])
+mapAccum :: (a -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
+mapAccum f = mapAccumWithKey (\a _ x -> f a x)
+
+-- | /O(n)/. The function @'mapAccumWithKey'@ threads an accumulating
+-- argument through the map in ascending order of keys.
+--
+-- > let f a k b = (a ++ " " ++ (show k) ++ "-" ++ b, b ++ "X")
+-- > mapAccumWithKey f "Everything:" (fromList [(5,"a"), (3,"b")]) == ("Everything: 3-b 5-a", fromList [(3, "bX"), (5, "aX")])
+mapAccumWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
+mapAccumWithKey f a Empty = (a, Empty)
+mapAccumWithKey f a (NonEmpty min root) = let (a', root') = goL min root a in (a', NonEmpty min root')
+  where
+    goL min (Tip x) a =
+        let (a', x') = f a min x
+        in  (a', Tip x')
+    goL min (Bin max l r) a =
+        let (a',  l') = goL min l a
+            (a'', r') = goR max r a'
+        in  (a'', Bin max l' r')
+    
+    goR max (Tip x) a =
+        let (a', x') = f a max x
+        in  (a', Tip x')
+    goR max (Bin min l r) a =
+        let (a',  l') = goL min l a
+            (a'', r') = goR max r a'
+        in  (a'', Bin min l' r')
+
+-- | /O(n)/. The function @'mapAccumRWithKey'@ threads an accumulating
+-- argument through the map in descending order of keys.
+mapAccumRWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
+mapAccumRWithKey f a Empty = (a, Empty)
+mapAccumRWithKey f a (NonEmpty min root) = let (a', root') = goL min root a in (a', NonEmpty min root')
+  where
+    goL min (Tip x) a =
+        let (a', x') = f a min x
+        in  (a', Tip x')
+    goL min (Bin max l r) a =
+        let (a',  r') = goR max r a
+            (a'', l') = goL min l a'
+        in  (a'', Bin max l' r')
+    
+    goR max (Tip x) a =
+        let (a', x') = f a max x
+        in  (a', Tip x')
+    goR max (Bin min l r) a =
+        let (a',  r') = goR max r a
+            (a'', l') = goL min l a'
+        in  (a'', Bin min l' r')
+
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
 fromList = foldr (uncurry insert) empty
@@ -817,7 +910,7 @@ showTree = unlines . aux where
     aux Empty = []
     aux (NonEmpty min node) = show min : auxNode False node
     auxNode _ (Tip x) = ["+->" ++ show x]
-    auxNode lined (Bin bound l r) = ["+--" ++ show bound, prefix : "  |"] ++ map indent (auxNode True l) ++ [prefix : "  |"] ++ map indent (auxNode False r)
+    auxNode lined (Bin bound l r) = ["+--" ++ show bound, prefix : "  |"] ++ fmap indent (auxNode True l) ++ [prefix : "  |"] ++ fmap indent (auxNode False r)
       where
         prefix = if lined then '|' else ' '
         indent r = prefix : "  " ++ r
