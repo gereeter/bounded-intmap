@@ -1,7 +1,7 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my [current benchmark results](https://github.com/gereeter/bounded-intmap/blob/master/benchmarks/report.html), this implemenation seems to be 1.4-4x faster than stock `Data.IntMap`.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to be 1-1.5x slower than stock `Data.IntMap`.
 
 I deviate from the original implementation in a couple of ways:
 
