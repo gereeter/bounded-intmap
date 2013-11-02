@@ -99,8 +99,8 @@ member k = k `seq` start
     goL !xorCache min (Bin max l r)
         | k > max = False
         | k == max = True
-        | ltMSB xorCache (xor min max) = startR max r
-        | otherwise = goL xorCache min l
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r
     
     goR !xorCache max (Tip x) = False
     goR !xorCache max (Bin min l r)
@@ -126,8 +126,8 @@ notMember k = k `seq` start
     goL !xorCache min (Bin max l r)
         | k > max = True
         | k == max = False
-        | ltMSB xorCache (xor min max) = startR max r
-        | otherwise = goL xorCache min l
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r
     
     goR !xorCache max (Tip x) = True
     goR !xorCache max (Bin min l r)
@@ -153,8 +153,8 @@ lookup k = k `seq` start
         | otherwise = Nothing
     goL !xorCache min (Bin max l r)
         | k > max = Nothing
-        | ltMSB xorCache (xor min max) = startR max r
-        | otherwise = goL xorCache min l
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r
     
     goR !xorCache max (Tip x)
         | k == max = Just x
@@ -183,8 +183,8 @@ findWithDefault def k = k `seq` start
         | otherwise = def
     goL !xorCache min (Bin max l r)
         | k > max = def
-        | ltMSB xorCache (xor min max) = startR max r
-        | otherwise = goL xorCache min l
+        | ltMSB xorCache (xor min max) = goL xorCache min l
+        | otherwise = startR max r
     
     goR !xorCache max (Tip x)
         | k == max = x
@@ -231,8 +231,8 @@ insertWith combine !k v (NonEmpty min node)
         | otherwise = Bin k (Tip x) (Tip v)
     goL !xorCache min (Bin max l r)
         | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR max r)
-        | ltMSB xorCache (xor min max) = Bin max l (startR max r)
-        | otherwise = Bin max (goL xorCache min l) r
+        | ltMSB xorCache (xor min max) = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (startR max r)
 
     goR !xorCache max (Tip x)
         | k == max = Tip (combine v x)
@@ -286,8 +286,8 @@ delete k = k `seq` start
         | otherwise = NonEmpty min (Tip x)
     goL !xorCache min n@(Bin max l r)
         | k > max = NonEmpty min n
-        | ltMSB xorCache (xor min max) = binRL min l (startR max r)
-        | otherwise = binLL max (goL xorCache min l) r
+        | ltMSB xorCache (xor min max) = binLL max (goL xorCache min l) r
+        | otherwise = binRL min l (startR max r)
     
     goR !xorCache max (Tip x)
         | k == max = Empty
@@ -382,8 +382,8 @@ unionWithKey combine (NonEmpty min1 node1) (NonEmpty min2 node2) = NonEmpty (Pre
         | otherwise = Bin k (Tip x) (Tip v)
     goInsertLL k v !xorCache min (Bin max l r)
         | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR k v max r)
-        | ltMSB xorCache (xor min max) = Bin max l (insertRL k v max r)
-        | otherwise = Bin max (goInsertLL k v xorCache min l) r
+        | ltMSB xorCache (xor min max) = Bin max (goInsertLL k v xorCache min l) r
+        | otherwise = Bin max l (insertRL k v max r)
 
     goInsertRL k v !xorCache max (Tip x)
         | k == max = Tip (combine k v x)
@@ -398,8 +398,8 @@ unionWithKey combine (NonEmpty min1 node1) (NonEmpty min2 node2) = NonEmpty (Pre
         | otherwise = Bin k (Tip x) (Tip v)
     goInsertLR k v !xorCache min (Bin max l r)
         | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR k v max r)
-        | ltMSB xorCache (xor min max) = Bin max l (insertRR k v max r)
-        | otherwise = Bin max (goInsertLR k v xorCache min l) r
+        | ltMSB xorCache (xor min max) = Bin max (goInsertLR k v xorCache min l) r
+        | otherwise = Bin max l (insertRR k v max r)
 
     goInsertRR k v !xorCache max (Tip x)
         | k == max = Tip (combine k x v)
@@ -503,8 +503,8 @@ intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL mi
         | otherwise = Empty
     endLL k v !xorCache min (Bin max l r)
         | k > max = Empty
-        | ltMSB xorCache (xor min max) = finishRL k v max r
-        | otherwise = endLL k v xorCache min l
+        | ltMSB xorCache (xor min max) = endLL k v xorCache min l
+        | otherwise = finishRL k v max r
     
     endRL k v !xorCache max (Tip x)
         | k == max = NonEmpty k (Tip (combine k v x))
@@ -519,8 +519,8 @@ intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL mi
         | otherwise = Empty
     endLR k v !xorCache min (Bin max l r)
         | k > max = Empty
-        | ltMSB xorCache (xor min max) = finishRR k v max r
-        | otherwise = endLR k v xorCache min l
+        | ltMSB xorCache (xor min max) = endLR k v xorCache min l
+        | otherwise = finishRR k v max r
     
     endRR k v !xorCache max (Tip x)
         | k == max = NonEmpty k (Tip (combine k x v))
