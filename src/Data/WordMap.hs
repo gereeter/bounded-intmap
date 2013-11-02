@@ -91,6 +91,10 @@ instance Traversable Node where
     traverse f (Tip x) = Tip <$> f x
     traverse f (Bin bound l r) = Bin bound <$> traverse f l <*> traverse f r
 
+instance Monoid (WordMap a) where
+    mempty = empty
+    mappend = union
+
 instance NFData a => NFData (WordMap a) where
     rnf Empty = ()
     rnf (NonEmpty _ n) = rnf n

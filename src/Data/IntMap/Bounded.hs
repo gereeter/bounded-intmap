@@ -45,6 +45,7 @@ module Data.IntMap.Bounded (
 import Control.DeepSeq
 import Data.Foldable hiding (toList)
 import Data.Traversable
+import Data.Monoid
 
 import qualified Data.WordMap as W
 
@@ -61,6 +62,10 @@ instance Foldable IntMap where
 
 instance Traversable IntMap where
     traverse f (IntMap m) = fmap IntMap (traverse f m)
+
+instance Monoid (IntMap a) where
+    mempty = IntMap mempty
+    mappend (IntMap m1) (IntMap m2) = IntMap (mappend m1 m2)
 
 instance NFData a => NFData (IntMap a) where
     rnf (IntMap m) = rnf m
