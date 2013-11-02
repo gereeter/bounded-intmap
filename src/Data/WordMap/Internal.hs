@@ -20,8 +20,8 @@ import Prelude hiding (foldr, lookup, null, map)
 
 type Key = Word
 
-data WordMap a = Empty | NonEmpty {-# UNPACK #-} !Key !(Node a) deriving (Eq)
-data Node a = Tip a | Bin {-# UNPACK #-} !Key !(Node a) !(Node a) deriving (Eq, Show)
+data WordMap a = NonEmpty {-# UNPACK #-} !Key !(Node a) | Empty deriving (Eq)
+data Node a = Bin {-# UNPACK #-} !Key !(Node a) !(Node a) | Tip a deriving (Eq, Show)
 
 instance Show a => Show (WordMap a) where
     show m = "fromList " ++ show (toList m)
