@@ -10,7 +10,7 @@ Cabal-Version: >=1.8
 library
     HS-Source-Dirs:  src
     Build-Depends:   base, deepseq
-    Exposed-modules: Data.WordMap, Data.IntMap.Bounded
+    Exposed-modules: Data.WordMap, Data.WordMap.Internal, Data.IntMap.Bounded
     ghc-options:     -Wall
 
 benchmark main

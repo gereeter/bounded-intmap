@@ -40,13 +40,19 @@ module Data.IntMap.Bounded (
     -- * Conversions
     , toList
     , fromList
+    
+    , showTree
 ) where
 
 import Control.DeepSeq
+import Control.Applicative hiding (empty)
 import Data.Foldable hiding (toList)
 import Data.Traversable
 import Data.Monoid
 
+import Data.Bits (xor)
+
+import Data.WordMap.Internal (WordMap(..), Node(..))
 import qualified Data.WordMap as W
 
 import Prelude hiding (lookup, null)
@@ -58,10 +64,18 @@ instance Functor IntMap where
     fmap f (IntMap m) = IntMap (fmap f m)
 
 instance Foldable IntMap where
-    foldMap f (IntMap m) = foldMap f m
+    foldMap f (IntMap Empty) = mempty
+    foldMap f (IntMap (NonEmpty min (Tip x))) = f x
+    foldMap f (IntMap (NonEmpty min (Bin max l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = foldMap f r `mappend` foldMap f l
+        | otherwise = foldMap f l `mappend` foldMap f r
 
 instance Traversable IntMap where
-    traverse f (IntMap m) = fmap IntMap (traverse f m)
+    traverse f (IntMap Empty) = pure (IntMap Empty)
+    traverse f (IntMap (NonEmpty min (Tip x))) = IntMap . NonEmpty min . Tip <$> f x
+    traverse f (IntMap (NonEmpty min (Bin max l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = IntMap . NonEmpty min <$> (flip (Bin max) <$> traverse f r <*> traverse f l)
+        | otherwise = IntMap . NonEmpty min <$> (Bin max <$> traverse f l <*> traverse f r)
 
 instance Monoid (IntMap a) where
     mempty = IntMap mempty
@@ -127,7 +141,20 @@ intersectionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithKey f'
     f' k = f (fromIntegral k)
 
 toList :: IntMap a -> [(Int, a)]
-toList (IntMap m) = map (\(k, v) -> (fromIntegral k, v)) (W.toList m)
+toList (IntMap Empty) = []
+toList (IntMap (NonEmpty min (Tip x))) = [(fromIntegral min, x)]
+toList m@(IntMap (NonEmpty min (Bin max l r)))
+    | fromIntegral (xor min max) < (0 :: Int) = goR max r . goL min l $ []
+    | otherwise = goL min l . goR max r $ []
+  where
+    goL min (Tip x) = ((fromIntegral min, x):)
+    goL min (Bin max l r) = goL min l . goR max r
+    
+    goR max (Tip x) = ((fromIntegral max, x):)
+    goR max (Bin min l r) = goL min l . goR max r
 
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . map (\(k, v) -> (fromIntegral k, v))
+
+showTree :: Show a => 	IntMap a -> String
+showTree (IntMap m) = W.showTree m
