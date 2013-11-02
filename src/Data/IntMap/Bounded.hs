@@ -41,7 +41,9 @@ module Data.IntMap.Bounded (
     , toList
     , fromList
     
+    -- * Debugging
     , showTree
+    , valid
 ) where
 
 import Control.DeepSeq
@@ -156,5 +158,8 @@ toList m@(IntMap (NonEmpty min (Bin max l r)))
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . map (\(k, v) -> (fromIntegral k, v))
 
-showTree :: Show a => 	IntMap a -> String
+showTree :: Show a => IntMap a -> String
 showTree (IntMap m) = W.showTree m
+
+valid :: IntMap a -> Bool
+valid (IntMap m) = W.valid m

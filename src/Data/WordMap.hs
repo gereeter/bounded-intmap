@@ -45,6 +45,7 @@ module Data.WordMap (
     
     -- * Debugging
     , showTree
+    , valid
 ) where
 
 import Data.WordMap.Internal
