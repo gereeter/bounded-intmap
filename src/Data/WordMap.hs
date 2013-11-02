@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
+-- TODO: Add some comments describing how this implementation works.
+
 -- | A reimplementation of Data.IntMap that seems to be 1.4-4x faster.
 
 module Data.WordMap (
@@ -109,6 +111,8 @@ bounds :: WordMap a -> Maybe (Key, Key)
 bounds Empty = Nothing
 bounds (NonEmpty min (Tip _)) = Just (min, min)
 bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
+
+-- TODO: Is there a good way to unify the 'lookup'-like functions?
 
 -- | /O(min(n,W))/. Is the key a member of the map?
 member :: Key -> WordMap a -> Bool
@@ -354,6 +358,10 @@ union = unionWith const
 -- > unionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "aA"), (7, "C")]
 unionWith :: (a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
 unionWith f = unionWithKey (const f)
+
+-- TODO: Come up with some sort of 'mergeWithKey'-like function to avoid the need to duplicate this monstrosity.
+-- TODO: Clean up 'unionWithKey' - this is some horribly ugly code.
+-- TODO: Explain how 'unionWithKey' works.
 
 -- | /O(n+m)/. The union with a combining function.
 --
