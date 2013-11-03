@@ -420,43 +420,51 @@ delete :: Key -> WordMap a -> WordMap a
 delete k = k `seq` start
   where
     start Empty = Empty
-    start m@(NonEmpty min node)
-        | k < min = m
-        | otherwise = goL (xor min k) min node
-    
-    goL !xorCache min (Tip x)
+    start m@(NonEmpty min (Tip x))
         | k == min = Empty
-        | otherwise = NonEmpty min (Tip x)
+        | otherwise = m
+    start m@(NonEmpty min (Bin max l r))
+        | k < min = m
+        | k == min = let DR min' root' = goDeleteMin max l r in NonEmpty min' root'
+        | otherwise = NonEmpty min (goL (xor min k) min (Bin max l r))
+    
+    goL !xorCache min n@(Tip _) = n
     goL !xorCache min n@(Bin max l r)
-        | k > max = NonEmpty min n
-        | xorCache < xorCacheMax = binLL max (goL xorCache min l) r
-        | otherwise = binRL min l (goR xorCacheMax max r)
+        | k > max = Bin max l r
+        | k == max = case r of
+            Tip _ -> l
+            Bin minI lI rI -> let DR max' r' = goDeleteMax minI lI rI
+                              in  Bin max' l r'
+        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (goR xorCacheMax max r)
       where xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x)
-        | k == max = Empty
-        | otherwise = NonEmpty max (Tip x)
+    goR !xorCache max n@(Tip _) = n
     goR !xorCache max n@(Bin min l r)
-        | k < min = NonEmpty max n
-        | xorCache < xorCacheMin = binRR min l (goR xorCache max r)
-        | otherwise = binLR max (goL xorCacheMin min l) r
+        | k < min = n
+        | k == min = case l of
+            Tip _ -> r
+            Bin maxI lI rI -> let DR min' l' = goDeleteMin maxI lI rI
+                              in  Bin min' l' r
+        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
+        | otherwise = Bin max (goL xorCacheMin min l) r
       where xorCacheMin = xor min k
     
-    binLL max Empty (Tip x) = NonEmpty max (Tip x)
-    binLL max Empty (Bin min l r) = NonEmpty min (Bin max l r)
-    binLL max (NonEmpty min l) r = NonEmpty min (Bin max l r)
+    goDeleteMin max l r = case l of
+        Tip _ -> case r of
+            Tip _ -> DR max r
+            Bin min l' r' -> DR min (Bin max l' r')
+        Bin maxI lI rI -> let DR min l' = goDeleteMin maxI lI rI
+                          in  DR min (Bin max l' r)
     
-    binLR max Empty (Tip x) = NonEmpty max (Tip x)
-    binLR max Empty (Bin min l r) = NonEmpty max (Bin min l r)
-    binLR max (NonEmpty min l) r = NonEmpty max (Bin min l r)
-    
-    binRL min (Tip x) Empty = NonEmpty min (Tip x)
-    binRL min (Bin max l r) Empty = NonEmpty min (Bin max l r)
-    binRL min l (NonEmpty max r) = NonEmpty min (Bin max l r)
-    
-    binRR min (Tip x) Empty = NonEmpty min (Tip x)
-    binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
-    binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
+    goDeleteMax min l r = case r of
+        Tip _ -> case l of
+            Tip _ -> DR min l
+            Bin max l' r' -> DR max (Bin min l' r')
+        Bin minI lI rI -> let DR max r' = goDeleteMax minI lI rI
+                          in  DR max (Bin min l r')
+
+data DeleteResult a = DR {-# UNPACK #-} !Key !(Node a)
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
