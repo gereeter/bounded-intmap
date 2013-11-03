@@ -90,24 +90,21 @@ member k = k `seq` start
     start (NonEmpty min node)
         | k < min = False
         | k == min = True
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x) = False
     goL !xorCache min (Bin max l r)
         | k > max = False
         | k == max = True
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r
+        | xorCache < xor k max = goL xorCache min l
+        | otherwise = goR (xor k max) max r
     
     goR !xorCache max (Tip x) = False
     goR !xorCache max (Bin min l r)
         | k < min = False
         | k == min = True
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l
+        | xorCache < xor min k = goR xorCache max r
+        | otherwise = goL (xor min k) min l
 
 -- | /O(min(n,W))/. Is the key not a member of the map?
 notMember :: Key -> WordMap a -> Bool
@@ -117,24 +114,21 @@ notMember k = k `seq` start
     start (NonEmpty min node)
         | k < min = True
         | k == min = False
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x) = True
     goL !xorCache min (Bin max l r)
         | k > max = True
         | k == max = False
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r
+        | xorCache < xor k max = goL xorCache min l
+        | otherwise = goR (xor k max) max r
     
     goR !xorCache max (Tip x) = True
     goR !xorCache max (Bin min l r)
         | k < min = True
         | k == min = False
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l
+        | xorCache < xor min k = goR xorCache max r
+        | otherwise = goL (xor min k) min l
 
 -- | /O(min(n,W))/. Lookup the value at a key in the map.
 lookup :: Key -> WordMap a -> Maybe a
@@ -143,26 +137,23 @@ lookup k = k `seq` start
     start Empty = Nothing
     start (NonEmpty min node)
         | k < min = Nothing
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x)
         | k == min = Just x
         | otherwise = Nothing
     goL !xorCache min (Bin max l r)
         | k > max = Nothing
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r
+        | xorCache < xor k max = goL xorCache min l
+        | otherwise = goR (xor k max) max r
     
     goR !xorCache max (Tip x)
         | k == max = Just x
         | otherwise = Nothing
     goR !xorCache max (Bin min l r)
         | k < min = Nothing
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l
+        | xorCache < xor min k = goR xorCache max r
+        | otherwise = goL (xor min k) min l
 
 -- | /O(min(n,W))/. The expression @findWithDefault def k map@ returns
 -- the value at key @k@ or returns @def@ when the key is not an element
@@ -377,26 +368,28 @@ insertWith :: (a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
 insertWith combine !k v Empty = NonEmpty k (Tip v)
 insertWith combine !k v (NonEmpty min node)
     | k < min = NonEmpty k (finishL min node)
-    | otherwise = NonEmpty min (startL min node)
+    | otherwise = NonEmpty min (goL (xor min k) min node)
   where
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
     
     goL !xorCache min (Tip x)
         | k == min = Tip (combine v x)
         | otherwise = Bin k (Tip x) (Tip v)
     goL !xorCache min (Bin max l r)
         | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR max r)
-        | ltMSB xorCache (xor min max) = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (startR max r)
+        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (goR xorCacheMax max r)
+      where
+        xorCacheMax = xor k max
 
     goR !xorCache max (Tip x)
         | k == max = Tip (combine v x)
         | otherwise = Bin k (Tip v) (Tip x)
     goR !xorCache max (Bin min l r)
         | k < min = if ltMSB (xor min max) xorCache then Bin k (Tip v) (Bin min l r) else Bin k (finishL min l) r
-        | ltMSB xorCache (xor min max) = Bin min l (goR xorCache max r)
-        | otherwise = Bin min (startL min l) r
+        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
+        | otherwise = Bin min (goL xorCacheMin min l) r
+      where
+        xorCacheMin = xor min k
     
     finishL min = endL (xor k min) min
     finishR max = endR (xor k max) max
@@ -432,26 +425,25 @@ delete k = k `seq` start
     start Empty = Empty
     start m@(NonEmpty min node)
         | k < min = m
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x)
         | k == min = Empty
         | otherwise = NonEmpty min (Tip x)
     goL !xorCache min n@(Bin max l r)
         | k > max = NonEmpty min n
-        | ltMSB xorCache (xor min max) = binLL max (goL xorCache min l) r
-        | otherwise = binRL min l (startR max r)
+        | xorCache < xorCacheMax = binLL max (goL xorCache min l) r
+        | otherwise = binRL min l (goR xorCacheMax max r)
+      where xorCacheMax = xor k max
     
     goR !xorCache max (Tip x)
         | k == max = Empty
         | otherwise = NonEmpty max (Tip x)
     goR !xorCache max n@(Bin min l r)
         | k < min = NonEmpty max n
-        | ltMSB xorCache (xor min max) = binRR min l (goR xorCache max r)
-        | otherwise = binLR max (startL min l) r
+        | xorCache < xorCacheMin = binRR min l (goR xorCache max r)
+        | otherwise = binLR max (goL xorCacheMin min l) r
+      where xorCacheMin = xor min k
     
     binLL max Empty (Tip x) = NonEmpty max (Tip x)
     binLL max Empty (Bin min l r) = NonEmpty min (Bin max l r)
