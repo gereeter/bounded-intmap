@@ -168,26 +168,27 @@ findWithDefault def k = k `seq` start
     start Empty = def
     start (NonEmpty min node)
         | k < min = def
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x)
         | k == min = x
         | otherwise = def
     goL !xorCache min (Bin max l r)
         | k > max = def
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r
+        | xorCache < xorCacheMax = goL xorCache min l
+        | otherwise = goR xorCacheMax max r
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x)
         | k == max = x
         | otherwise = def
     goR !xorCache max (Bin min l r)
         | k < min = def
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l
+        | xorCache < xorCacheMin = goR xorCache max r
+        | otherwise = goL xorCacheMin min l
+      where
+        xorCacheMin = xor min k
 
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
@@ -200,26 +201,27 @@ lookupLT k = k `seq` start
     start Empty = Nothing
     start (NonEmpty min node)
         | min >= k = Nothing
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x)
         | min < k = Just (min, x)
         | otherwise = Nothing
     goL !xorCache min (Bin max l r)
         | max < k = Just (max, getMaxV r)
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r min l
+        | xorCache < xorCacheMax = goL xorCache min l
+        | otherwise = goR xorCacheMax max r min l
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x) fMin fallback
         | max < k = Just (max, x)
         | otherwise = Just (getMax fMin fallback)
     goR !xorCache max (Bin min l r) fMin fallback
         | min >= k = Just (getMax fMin fallback)
-        | ltMSB xorCache (xor min max) = goR xorCache max r min l
-        | otherwise = startL min l
+        | xorCache < xorCacheMin = goR xorCache max r min l
+        | otherwise = goL xorCacheMin min l
+      where
+        xorCacheMin = xor min k
     
     getMax min (Tip x) = (min, x)
     getMax min (Bin max l r) = (max, getMaxV r)
@@ -239,26 +241,27 @@ lookupLE k = k `seq` start
     start Empty = Nothing
     start (NonEmpty min node)
         | min > k = Nothing
-        | otherwise = startL min node
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goL (xor min k) min node
     
     goL !xorCache min (Tip x)
         | min <= k = Just (min, x)
         | otherwise = Nothing
     goL !xorCache min (Bin max l r)
         | max <= k = Just (max, getMaxV r)
-        | ltMSB xorCache (xor min max) = goL xorCache min l
-        | otherwise = startR max r min l
+        | xorCache < xorCacheMax = goL xorCache min l
+        | otherwise = goR xorCacheMax max r min l
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x) fMin fallback
         | max <= k = Just (max, x)
         | otherwise = Just (getMax fMin fallback)
     goR !xorCache max (Bin min l r) fMin fallback
         | min > k = Just (getMax fMin fallback)
-        | ltMSB xorCache (xor min max) = goR xorCache max r min l
-        | otherwise = startL min l
+        | xorCache < xorCacheMin = goR xorCache max r min l
+        | otherwise = goL xorCacheMin min l
+      where
+        xorCacheMin = xor min k
     
     getMax min (Tip x) = (min, x)
     getMax min (Bin max l r) = (max, getMaxV r)
@@ -278,26 +281,27 @@ lookupGT k = k `seq` start
     start (NonEmpty min (Tip x)) = Just (min, x)
     start (NonEmpty min (Bin max l r))
         | max <= k = Nothing
-        | otherwise = startR max (Bin min l r)
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goR (xor k max) max (Bin min l r)
     
     goL !xorCache min (Tip x) fMax fallback
         | min > k = Just (min, x)
         | otherwise = Just (getMin fMax fallback)
     goL !xorCache min (Bin max l r) fMax fallback
         | max <= k = Just (getMin fMax fallback)
-        | ltMSB xorCache (xor min max) = goL xorCache min l max r
-        | otherwise = startR max r
+        | xorCache < xorCacheMax = goL xorCache min l max r
+        | otherwise = goR xorCacheMax max r
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x)
         | max > k = Just (max, x)
         | otherwise = Nothing
     goR !xorCache max (Bin min l r)
         | min > k = Just (min, getMinV l)
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l max r
+        | xorCache < xorCacheMin = goR xorCache max r
+        | otherwise = goL xorCacheMin min l max r
+      where
+        xorCacheMin = xor min k
     
     getMin max (Tip x) = (max, x)
     getMin max (Bin min l r) = (min, getMinV l)
@@ -318,26 +322,27 @@ lookupGE k = k `seq` start
     start (NonEmpty min (Tip x)) = Just (min, x)
     start (NonEmpty min (Bin max l r))
         | max < k = Nothing
-        | otherwise = startR max (Bin min l r)
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = goR (xor k max) max (Bin min l r)
     
     goL !xorCache min (Tip x) fMax fallback
         | min >= k = Just (min, x)
         | otherwise = Just (getMin fMax fallback)
     goL !xorCache min (Bin max l r) fMax fallback
         | max < k = Just (getMin fMax fallback)
-        | ltMSB xorCache (xor min max) = goL xorCache min l max r
-        | otherwise = startR max r
+        | xorCache < xorCacheMax = goL xorCache min l max r
+        | otherwise = goR xorCacheMax max r
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x)
         | max >= k = Just (max, x)
         | otherwise = Nothing
     goR !xorCache max (Bin min l r)
         | min >= k = Just (min, getMinV l)
-        | ltMSB xorCache (xor min max) = goR xorCache max r
-        | otherwise = startL min l max r
+        | xorCache < xorCacheMin = goR xorCache max r
+        | otherwise = goL xorCacheMin min l max r
+      where
+        xorCacheMin = xor min k
     
     getMin max (Tip x) = (max, x)
     getMin max (Bin min l r) = (min, getMinV l)
