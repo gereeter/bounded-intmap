@@ -25,3 +25,26 @@ I deviate from the original implementation in a couple of ways:
 
 * I factored the datatype into two pieces: `Node` for non-empty trees, and `WordMap` for possibly empty trees.
 * I added an optimization that seems to have helped immensely - I cache some of the computation for locating a key as I traverse the key, making it quicker to decide which way to go.
+
+Description of the internals
+----------------------------
+### Figuring out which way to go ###
+Suppose we are looking up a key `k` in a tree. We know that the minimum key in the tree is `min` and that the maximum key is `max`. Represented in binary:
+
+             shared prefix   bit to split on
+               /----------\  /
+    min:       010010010101 0 ????????
+    max:       010010010101 1 ????????
+    k:         010010010101 ? ????????
+
+To figure out in which subtree we need to recursively search for `k`, we need to know whether the bit to split on is zero or one. Now, if it is zero, then
+
+    xor min k: 000000000000 0 ????????
+    xor k max: 000000000000 1 ????????
+
+If it is one:
+
+    xor min k: 000000000000 1 ????????
+    xor k max: 000000000000 0 ????????
+
+Therefore, the splitting bit is set iff `xor min k > xor k max`. Taking the terminology from the original article, `insideR k min max = xor min k > xor k max`.
