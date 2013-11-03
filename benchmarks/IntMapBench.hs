@@ -26,12 +26,16 @@ main = do
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 keys) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 keys) denseW
                 ]
+            , bgroup "member"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\n x -> if M.member x m then n + 1 else n) 0 keys) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 keys) denseW
+                ]
             , bgroup "insert"
-                [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m elems) denseW
                 ]
             , bgroup "delete"
-                [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m keys) denseW
                 ]
             ]
@@ -39,6 +43,10 @@ main = do
             [ bgroup "lookup"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 sKeysSearch) sparseW
+                ]
+            , bgroup "member"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\n x -> if M.member x m then n + 1 else n) 0 sKeysSearch) sparseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 sKeysSearch) sparseW
                 ]
             , bgroup "insert"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m sElemsSearch) sparseM
