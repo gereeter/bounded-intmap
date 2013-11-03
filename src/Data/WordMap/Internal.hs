@@ -353,7 +353,41 @@ singleton k v = NonEmpty k (Tip v)
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value. 
 insert :: Key -> a -> WordMap a -> WordMap a
-insert = insertWith const
+insert !k v Empty = NonEmpty k (Tip v)
+insert !k v (NonEmpty min node)
+    | k < min = NonEmpty k (endL (xor min k) min node)
+    | otherwise = NonEmpty min (goL (xor min k) min node)
+  where
+    
+    goL !xorCache min (Tip x)
+        | k == min = Tip v
+        | otherwise = Bin k (Tip x) (Tip v)
+    goL !xorCache min (Bin max l r)
+        | k > max = if xor min max < xorCacheMax then Bin k (Bin max l r) (Tip v) else Bin k l (endR xorCacheMax max r)
+        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (goR xorCacheMax max r)
+      where
+        xorCacheMax = xor k max
+
+    goR !xorCache max (Tip x)
+        | k == max = Tip v
+        | otherwise = Bin k (Tip v) (Tip x)
+    goR !xorCache max (Bin min l r)
+        | k < min = if xor min max < xorCacheMin then Bin k (Tip v) (Bin min l r) else Bin k (endL xorCacheMin min l) r
+        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
+        | otherwise = Bin min (goL xorCacheMin min l) r
+      where
+        xorCacheMin = xor min k
+    
+    endL !xorCache min (Tip x) = Bin min (Tip v) (Tip x)
+    endL !xorCache min (Bin max l r)
+        | xor min max < xorCache = Bin max (Tip v) (Bin min l r)
+        | otherwise = Bin max (endL xorCache min l) r
+
+    endR !xorCache max (Tip x) = Bin max (Tip x) (Tip v)
+    endR !xorCache max (Bin min l r)
+        | xor min max < xorCache = Bin min (Bin max l r) (Tip v)
+        | otherwise = Bin min l (endR xorCache max r)
 
 -- | /O(min(n,W))/. Insert with a combining function.
 -- @'insertWith' f key value mp@
