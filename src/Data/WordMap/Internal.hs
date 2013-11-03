@@ -464,6 +464,11 @@ delete k = k `seq` start
         Bin minI lI rI -> let DR max r' = goDeleteMax minI lI rI
                           in  DR max (Bin min l r')
 
+-- TODO: Does a strict pair work? My guess is not, as GHC was already
+-- unboxing the tuple, but it would be simpler to use one of those.
+-- | Without this specialized type (I was just using a tuple), GHC's
+-- CPR correctly unboxed the tuple, but it couldn't unbox the returned
+-- Key, leading to lots of inefficiency (3x slower than stock Data.IntMap)
 data DeleteResult a = DR {-# UNPACK #-} !Key !(Node a)
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
