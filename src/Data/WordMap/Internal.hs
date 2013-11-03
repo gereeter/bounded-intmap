@@ -367,7 +367,7 @@ insert = insertWith const
 insertWith :: (a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
 insertWith combine !k v Empty = NonEmpty k (Tip v)
 insertWith combine !k v (NonEmpty min node)
-    | k < min = NonEmpty k (finishL min node)
+    | k < min = NonEmpty k (endL (xor min k) min node)
     | otherwise = NonEmpty min (goL (xor min k) min node)
   where
     
@@ -375,7 +375,7 @@ insertWith combine !k v (NonEmpty min node)
         | k == min = Tip (combine v x)
         | otherwise = Bin k (Tip x) (Tip v)
     goL !xorCache min (Bin max l r)
-        | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR max r)
+        | k > max = if xor min max < xorCacheMax then Bin k (Bin max l r) (Tip v) else Bin k l (endR xorCacheMax max r)
         | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
         | otherwise = Bin max l (goR xorCacheMax max r)
       where
@@ -385,23 +385,20 @@ insertWith combine !k v (NonEmpty min node)
         | k == max = Tip (combine v x)
         | otherwise = Bin k (Tip v) (Tip x)
     goR !xorCache max (Bin min l r)
-        | k < min = if ltMSB (xor min max) xorCache then Bin k (Tip v) (Bin min l r) else Bin k (finishL min l) r
+        | k < min = if xor min max < xorCacheMin then Bin k (Tip v) (Bin min l r) else Bin k (endL xorCacheMin min l) r
         | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
         | otherwise = Bin min (goL xorCacheMin min l) r
       where
         xorCacheMin = xor min k
     
-    finishL min = endL (xor k min) min
-    finishR max = endR (xor k max) max
-    
     endL !xorCache min (Tip x) = Bin min (Tip v) (Tip x)
     endL !xorCache min (Bin max l r)
-        | ltMSB (xor min max) xorCache = Bin max (Tip v) (Bin min l r)
+        | xor min max < xorCache = Bin max (Tip v) (Bin min l r)
         | otherwise = Bin max (endL xorCache min l) r
 
     endR !xorCache max (Tip x) = Bin max (Tip x) (Tip v)
     endR !xorCache max (Bin min l r)
-        | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
+        | xor min max < xorCache = Bin min (Bin max l r) (Tip v)
         | otherwise = Bin min l (endR xorCache max r)
 
 -- | /O(min(n,W))/. Insert with a combining function.
