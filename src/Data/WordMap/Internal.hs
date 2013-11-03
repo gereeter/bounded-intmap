@@ -144,16 +144,20 @@ lookup k = k `seq` start
         | otherwise = Nothing
     goL !xorCache min (Bin max l r)
         | k > max = Nothing
-        | xorCache < xor k max = goL xorCache min l
-        | otherwise = goR (xor k max) max r
+        | xorCache < xorCacheMax = goL xorCache min l
+        | otherwise = goR xorCacheMax max r
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max (Tip x)
         | k == max = Just x
         | otherwise = Nothing
     goR !xorCache max (Bin min l r)
         | k < min = Nothing
-        | xorCache < xor min k = goR xorCache max r
-        | otherwise = goL (xor min k) min l
+        | xorCache < xorCacheMin = goR xorCache max r
+        | otherwise = goL xorCacheMin min l
+      where
+        xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. The expression @findWithDefault def k map@ returns
 -- the value at key @k@ or returns @def@ when the key is not an element
