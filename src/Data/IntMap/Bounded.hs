@@ -25,6 +25,10 @@ module Data.IntMap.Bounded (
     
     -- ** Delete\/Update
     , delete
+    , adjust
+    , adjustWithKey
+    , update
+    , updateWithKey
     
     -- * Combine
     -- ** Union
@@ -36,6 +40,11 @@ module Data.IntMap.Bounded (
     , intersection
     , intersectionWith
     , intersectionWithKey
+    
+    -- * Traversal
+    -- ** Map
+    , map
+    , mapWithKey
     
     -- * Conversions
     , toList
@@ -57,7 +66,7 @@ import Data.Bits (xor)
 import Data.WordMap.Internal (WordMap(..), Node(..))
 import qualified Data.WordMap as W
 
-import Prelude hiding (lookup, null)
+import Prelude hiding (lookup, null, map)
 
 type Key = Int
 newtype IntMap a = IntMap (W.WordMap a)
@@ -122,6 +131,20 @@ insertWithKey f k = insertWith (f k) k
 delete :: Key -> IntMap a -> IntMap a
 delete k (IntMap m) = IntMap (W.delete (fromIntegral k) m)
 
+adjust :: (a -> a) -> Key -> IntMap a -> IntMap a
+adjust f k (IntMap m) = IntMap (W.adjust f (fromIntegral k) m)
+
+adjustWithKey :: (Key -> a -> a) -> Key -> IntMap a -> IntMap a
+adjustWithKey f k (IntMap m) = IntMap (W.adjustWithKey f' (fromIntegral k) m) where
+    f' = f . fromIntegral
+
+update :: (a -> Maybe a) -> Key -> IntMap a -> IntMap a
+update f k (IntMap m) = IntMap (W.update f (fromIntegral k) m)
+
+updateWithKey :: (Key -> a -> Maybe a) -> Key -> IntMap a -> IntMap a
+updateWithKey f k (IntMap m) = IntMap (W.updateWithKey f' (fromIntegral k) m) where
+    f' = f . fromIntegral
+
 union :: IntMap a -> IntMap a -> IntMap a
 union (IntMap m1) (IntMap m2) = IntMap (W.union m1 m2)
 
@@ -142,6 +165,13 @@ intersectionWithKey :: (Key -> a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
 intersectionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithKey f' m1 m2) where
     f' k = f (fromIntegral k)
 
+map :: (a -> b) -> IntMap a -> IntMap b
+map = fmap
+
+mapWithKey :: (Key -> a -> b) -> IntMap a -> IntMap b
+mapWithKey f (IntMap m) = IntMap (W.mapWithKey f' m) where
+    f' = f . fromIntegral
+
 toList :: IntMap a -> [(Int, a)]
 toList (IntMap Empty) = []
 toList (IntMap (NonEmpty min (Tip x))) = [(fromIntegral min, x)]
@@ -156,7 +186,7 @@ toList m@(IntMap (NonEmpty min (Bin max l r)))
     goR max (Bin min l r) = goL min l . goR max r
 
 fromList :: [(Int, a)] -> IntMap a
-fromList = IntMap . W.fromList . map (\(k, v) -> (fromIntegral k, v))
+fromList = IntMap . W.fromList . fmap (\(k, v) -> (fromIntegral k, v))
 
 showTree :: Show a => IntMap a -> String
 showTree (IntMap m) = W.showTree m
