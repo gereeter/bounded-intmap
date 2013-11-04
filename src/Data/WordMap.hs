@@ -8,6 +8,9 @@ module Data.WordMap (
     -- * Map type
       WordMap, Key
     
+    -- * Operators
+    , (!)
+    
     -- * Query
     , null
     , size
@@ -56,7 +59,20 @@ module Data.WordMap (
     , mapAccumWithKey
     , mapAccumRWithKey
     
-    -- * Conversions
+    -- ** Folds
+    , foldr
+    , foldl
+    , foldrWithKey
+    , foldlWithKey
+    , foldMapWithKey
+    
+    -- ** Strict folds
+    , foldr'
+    , foldl'
+    , foldrWithKey'
+    , foldlWithKey'
+    
+    -- * Conversion
     , toList
     , fromList
     
@@ -67,4 +83,4 @@ module Data.WordMap (
 
 import Data.WordMap.Internal
 
-import Prelude hiding (lookup, null, map)
+import Prelude hiding (foldr, foldl, lookup, null, map)

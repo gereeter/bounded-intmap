@@ -2,7 +2,7 @@
 
 -- TODO: Add some comments describing how this implementation works.
 
--- | A reimplementation of Data.IntMap that seems to be 1.4-4x faster.
+-- | A reimplementation of Data.WordMap that seems to be 1.4-4x faster.
 
 module Data.WordMap.Internal where
 
@@ -10,13 +10,13 @@ import Control.DeepSeq
 import Control.Applicative hiding (empty)
 
 import Data.Monoid
-import Data.Foldable hiding (toList)
+import qualified Data.Foldable (Foldable(..))
 import Data.Traversable
 
 import Data.Word (Word)
 import Data.Bits (xor, (.|.))
 
-import Prelude hiding (foldr, lookup, null, map)
+import Prelude hiding (foldr, foldl, lookup, null, map)
 
 type Key = Word
 
@@ -34,13 +34,18 @@ instance Functor Node where
     fmap f (Tip x) = Tip (f x)
     fmap f (Bin bound l r) = Bin bound (fmap f l) (fmap f r)
 
-instance Foldable WordMap where
+instance Data.Foldable.Foldable WordMap where
     foldMap f Empty = mempty
-    foldMap f (NonEmpty _ node) = foldMap f node
+    foldMap f (NonEmpty _ node) = Data.Foldable.foldMap f node
+    
+    foldr = foldr
+    foldr' = foldr'
+    foldl = foldl
+    foldl' = foldl'
 
-instance Foldable Node where
+instance Data.Foldable.Foldable Node where
     foldMap f (Tip x) = f x
-    foldMap f (Bin _ l r) = foldMap f l `mappend` foldMap f r
+    foldMap f (Bin _ l r) = Data.Foldable.foldMap f l `mappend` Data.Foldable.foldMap f r
 
 instance Traversable WordMap where
     traverse f Empty = pure Empty
@@ -61,6 +66,14 @@ instance NFData a => NFData (WordMap a) where
 instance NFData a => NFData (Node a) where
     rnf (Tip x) = rnf x
     rnf (Bin _ l r) = rnf l `seq` rnf r
+
+-- | /O(min(n,W))/. Find the value at a key.
+-- Calls 'error' when the element can not be found.
+--
+-- > fromList [(5,'a'), (3,'b')] ! 1    Error: element not in the map
+-- > fromList [(5,'a'), (3,'b')] ! 5 == 'a'
+(!) :: WordMap a -> Key -> a
+(!) m k = findWithDefault (error $ "WordMap.!: key " ++ show k ++ " is not an element of the map") k m
 
 -- | /O(1)/. Is the map empty?
 null :: WordMap a -> Bool
@@ -511,7 +524,7 @@ delete k = k `seq` start
 -- unboxing the tuple, but it would be simpler to use one of those.
 -- | Without this specialized type (I was just using a tuple), GHC's
 -- CPR correctly unboxed the tuple, but it couldn't unbox the returned
--- Key, leading to lots of inefficiency (3x slower than stock Data.IntMap)
+-- Key, leading to lots of inefficiency (3x slower than stock Data.WordMap)
 data DeleteResult a = DR {-# UNPACK #-} !Key !(Node a)
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
@@ -526,26 +539,27 @@ adjust f k = k `seq` start
     start Empty = Empty
     start m@(NonEmpty min node)
         | k < min = m
-        | otherwise = NonEmpty min (startL min node)
-    
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
+        | otherwise = NonEmpty min (goL (xor min k) min node)
     
     goL !xorCache min n@(Tip x)
         | k == min = Tip (f x)
         | otherwise = n
     goL !xorCache min n@(Bin max l r)
         | k > max = n
-        | ltMSB xorCache (xor min max) = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (startR max r)
+        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (goR xorCacheMax max r)
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max n@(Tip x)
         | k == max = Tip (f x)
         | otherwise = n
     goR !xorCache max n@(Bin min l r)
         | k < min = n
-        | ltMSB xorCache (xor min max) = Bin min l (goR xorCache max r)
-        | otherwise = Bin min (startL min l) r
+        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
+        | otherwise = Bin min (goL xorCacheMin min l) r
+      where
+        xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
@@ -569,48 +583,53 @@ update :: (a -> Maybe a) -> Key -> WordMap a -> WordMap a
 update f k = k `seq` start
   where
     start Empty = Empty
-    start m@(NonEmpty min node)
+    start m@(NonEmpty min (Tip x))
+        | k == min = Empty
+        | otherwise = m
+    start m@(NonEmpty min (Bin max l r))
         | k < min = m
-        | otherwise = startL min node
+        | k == min = let DR min' root' = goMin max l r in NonEmpty min' root'
+        | otherwise = NonEmpty min (goL (xor min k) min (Bin max l r))
     
-    startL min = goL (xor k min) min
-    startR max = goR (xor k max) max
-    
-    goL !xorCache min (Tip x)
-        | k == min = case f x of
-            Nothing -> Empty
-            Just x' -> NonEmpty min (Tip x')
-        | otherwise = NonEmpty min (Tip x)
+    goL !xorCache min n@(Tip _) = n
     goL !xorCache min n@(Bin max l r)
-        | k > max = NonEmpty min n
-        | ltMSB xorCache (xor min max) = binLL max (goL xorCache min l) r
-        | otherwise = binRL min l (startR max r)
+        | k > max = Bin max l r
+        | k == max = case r of
+            Tip _ -> l
+            Bin minI lI rI -> let DR max' r' = goMax minI lI rI
+                              in  Bin max' l r'
+        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
+        | otherwise = Bin max l (goR xorCacheMax max r)
+      where xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x)
-        | k == max = case f x of
-            Nothing -> Empty
-            Just x' -> NonEmpty max (Tip x')
-        | otherwise = NonEmpty max (Tip x)
+    goR !xorCache max n@(Tip _) = n
     goR !xorCache max n@(Bin min l r)
-        | k < min = NonEmpty max n
-        | ltMSB xorCache (xor min max) = binRR min l (goR xorCache max r)
-        | otherwise = binLR max (startL min l) r
+        | k < min = n
+        | k == min = case l of
+            Tip _ -> r
+            Bin maxI lI rI -> let DR min' l' = goMin maxI lI rI
+                              in  Bin min' l' r
+        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
+        | otherwise = Bin max (goL xorCacheMin min l) r
+      where xorCacheMin = xor min k
     
-    binLL max Empty (Tip x) = NonEmpty max (Tip x)
-    binLL max Empty (Bin min l r) = NonEmpty min (Bin max l r)
-    binLL max (NonEmpty min l) r = NonEmpty min (Bin max l r)
+    goMin max l r = case l of
+        Tip x -> case f x of
+            Nothing -> case r of
+                Tip _ -> DR max r
+                Bin min l' r' -> DR min (Bin max l' r')
+            Just x' -> DR k (Bin max (Tip x') r)
+        Bin maxI lI rI -> let DR min l' = goMin maxI lI rI
+                          in  DR min (Bin max l' r)
     
-    binLR max Empty (Tip x) = NonEmpty max (Tip x)
-    binLR max Empty (Bin min l r) = NonEmpty max (Bin min l r)
-    binLR max (NonEmpty min l) r = NonEmpty max (Bin min l r)
-    
-    binRL min (Tip x) Empty = NonEmpty min (Tip x)
-    binRL min (Bin max l r) Empty = NonEmpty min (Bin max l r)
-    binRL min l (NonEmpty max r) = NonEmpty min (Bin max l r)
-    
-    binRR min (Tip x) Empty = NonEmpty min (Tip x)
-    binRR min (Bin max l r) Empty = NonEmpty max (Bin min l r)
-    binRR min l (NonEmpty max r) = NonEmpty max (Bin min l r)
+    goMax min l r = case r of
+        Tip x -> case f x of
+            Nothing -> case l of
+                Tip _ -> DR min l
+                Bin max l' r' -> DR max (Bin min l' r')
+            Just x' -> DR k (Bin min l (Tip x'))
+        Bin minI lI rI -> let DR max r' = goMax minI lI rI
+                          in  DR max (Bin min l r')
 
 -- | /O(min(n,W))/. The expression (@'updateWithKey' f k map@) updates the value @x@
 -- at @k@ (if it is in the map). If (@f k x@) is 'Nothing', the element is
@@ -933,9 +952,160 @@ mapAccumRWithKey f a (NonEmpty min root) = let (a', root') = goL min root a in (
             (a'', l') = goL min l a'
         in  (a'', Bin min l' r')
 
+-- | /O(n)/. Fold the values in the map using the given right-associative
+-- binary operator, such that @'foldr' f z == 'Prelude.foldr' f z . 'elems'@.
+--
+-- For example,
+--
+-- > elems map = foldr (:) [] map
+--
+-- > let f a len = len + (length a)
+-- > foldr f 0 (fromList [(5,"a"), (3,"bbb")]) == 4
+foldr :: (a -> b -> b) -> b -> WordMap a -> b
+foldr f z = start
+  where
+    start Empty = z
+    start (NonEmpty _ root) = go root z
+    
+    go (Tip x) acc = f x acc
+    go (Bin _ l r) acc = go l (go r acc)
+
+-- | /O(n)/. Fold the values in the map using the given left-associative
+-- binary operator, such that @'foldl' f z == 'Prelude.foldl' f z . 'elems'@.
+--
+-- For example,
+--
+-- > elems = reverse . foldl (flip (:)) []
+--
+-- > let f len a = len + (length a)
+-- > foldl f 0 (fromList [(5,"a"), (3,"bbb")]) == 4
+foldl :: (a -> b -> a) -> a -> WordMap b -> a
+foldl f z = start
+  where
+    start Empty = z
+    start (NonEmpty _ root) = go root z
+    
+    go (Tip x) acc = f acc x
+    go (Bin _ l r) acc = go r (go l acc)
+
+-- | /O(n)/. Fold the keys and values in the map using the given right-associative
+-- binary operator, such that
+-- @'foldrWithKey' f z == 'Prelude.foldr' ('uncurry' f) z . 'toAscList'@.
+--
+-- For example,
+--
+-- > keys map = foldrWithKey (\k x ks -> k:ks) [] map
+--
+-- > let f k a result = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+-- > foldrWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) == "Map: (5:a)(3:b)"
+foldrWithKey :: (Key -> a -> b -> b) -> b -> WordMap a -> b
+foldrWithKey f z = start
+  where
+    start Empty = z
+    start (NonEmpty min root) = goL min root z
+    
+    goL min (Tip x) acc = f min x acc
+    goL min (Bin max l r) acc = goL min l (goR max r acc)
+    
+    goR max (Tip x) acc = f max x acc
+    goR max (Bin min l r) acc = goL min l (goR max r acc)
+
+-- | /O(n)/. Fold the keys and values in the map using the given left-associative
+-- binary operator, such that
+-- @'foldlWithKey' f z == 'Prelude.foldl' (\\z' (kx, x) -> f z' kx x) z . 'toAscList'@.
+--
+-- For example,
+--
+-- > keys = reverse . foldlWithKey (\ks k x -> k:ks) []
+--
+-- > let f result k a = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+-- > foldlWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) == "Map: (3:b)(5:a)"
+foldlWithKey :: (a -> Key -> b -> a) -> a -> WordMap b -> a
+foldlWithKey f z = start
+  where
+    start Empty = z
+    start (NonEmpty min root) = goL min root z
+    
+    goL min (Tip x) acc = f acc min x
+    goL min (Bin max l r) acc = goR max r (goL min l acc)
+    
+    goR max (Tip x) acc = f acc max x
+    goR max (Bin min l r) acc = goR max r (goL min l acc)
+
+-- | /O(n)/. Fold the keys and values in the map using the given monoid, such that
+--
+-- @'foldMapWithKey' f = 'Prelude.fold' . 'mapWithKey' f@
+--
+-- This can be an asymptotically faster than 'foldrWithKey' or 'foldlWithKey' for some monoids.
+foldMapWithKey :: Monoid m => (Key -> a -> m) -> WordMap a -> m
+foldMapWithKey f = start
+  where
+    start Empty = mempty
+    start (NonEmpty min root) = goL min root
+    
+    goL min (Tip x) = f min x
+    goL min (Bin max l r) = goL min l `mappend` goR max r
+    
+    goR max (Tip x) = f max x
+    goR max (Bin min l r) = goL min l `mappend` goR max r
+
+-- | /O(n)/. A strict version of 'foldr'. Each application of the operator is
+-- evaluated before using the result in the next application. This
+-- function is strict in the starting value.
+foldr' :: (a -> b -> b) -> b -> WordMap a -> b
+foldr' f z = start
+  where
+    start Empty = z
+    start (NonEmpty _ root) = go root z
+    
+    go (Tip x) !acc = f x acc
+    go (Bin _ l r) !acc = go l (go r acc)
+
+-- | /O(n)/. A strict version of 'foldl'. Each application of the operator is
+-- evaluated before using the result in the next application. This
+-- function is strict in the starting value.
+foldl' :: (a -> b -> a) -> a -> WordMap b -> a
+foldl' f z = start
+  where
+    start Empty = z
+    start (NonEmpty _ root) = go root z
+    
+    go (Tip x) !acc = f acc x
+    go (Bin _ l r) !acc = go r (go l acc)
+
+-- | /O(n)/. A strict version of 'foldrWithKey'. Each application of the operator is
+-- evaluated before using the result in the next application. This
+-- function is strict in the starting value.
+foldrWithKey' :: (Key -> a -> b -> b) -> b -> WordMap a -> b
+foldrWithKey' f z = start
+  where
+    start Empty = z
+    start (NonEmpty min root) = goL min root z
+    
+    goL min (Tip x) !acc = f min x acc
+    goL min (Bin max l r) !acc = goL min l (goR max r acc)
+    
+    goR max (Tip x) !acc = f max x acc
+    goR max (Bin min l r) !acc = goL min l (goR max r acc)
+
+-- | /O(n)/. A strict version of 'foldlWithKey'. Each application of the operator is
+-- evaluated before using the result in the next application. This
+-- function is strict in the starting value.
+foldlWithKey' :: (a -> Key -> b -> a) -> a -> WordMap b -> a
+foldlWithKey' f z = start
+  where
+    start Empty = z
+    start (NonEmpty min root) = goL min root z
+    
+    goL min (Tip x) !acc = f acc min x
+    goL min (Bin max l r) !acc = goR max r (goL min l acc)
+    
+    goR max (Tip x) !acc = f acc max x
+    goR max (Bin min l r) !acc = goR max r (goL min l acc)
+
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
-fromList = foldr (uncurry insert) empty
+fromList = Data.Foldable.foldr (uncurry insert) empty
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Key, a)]
@@ -967,16 +1137,16 @@ valid (NonEmpty min root) = allKeys (> min) root && goL min root
     goL min (Tip x) = True
     goL min (Bin max l r) =
            allKeys (< max) r
-        && allKeys (\k -> not $ ltMSB (xor k max) (xor min max)) l
-        && allKeys (\k ->       ltMSB (xor k max) (xor min max)) r
+        && allKeys (\k -> xor min k < xor k max) l
+        && allKeys (\k -> xor min k > xor k max) r
         && goL min l
         && goR max r
     
     goR max (Tip x) = True
     goR max (Bin min l r) =
            allKeys (> min) l
-        && allKeys (\k -> not $ ltMSB (xor k max) (xor min max)) l
-        && allKeys (\k ->       ltMSB (xor k max) (xor min max)) r
+        && allKeys (\k -> xor min k < xor k max) l
+        && allKeys (\k -> xor min k > xor k max) r
         && goL min l
         && goR max r
     
