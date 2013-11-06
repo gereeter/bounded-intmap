@@ -20,52 +20,56 @@ import Prelude hiding (foldr, foldl, lookup, null, map)
 
 type Key = Word
 
-data WordMap a = NonEmpty {-# UNPACK #-} !Key !(Node a) | Empty deriving (Eq)
-data Node a = Bin {-# UNPACK #-} !Key !(Node a) !(Node a) | Tip a deriving (Eq, Show)
+data WordMap a = NonEmpty {-# UNPACK #-} !Key a !(Node a) | Empty deriving (Eq)
+data Node a = Bin {-# UNPACK #-} !Key a !(Node a) !(Node a) | Tip deriving (Eq, Show)
 
 instance Show a => Show (WordMap a) where
     show m = "fromList " ++ show (toList m)
 
 instance Functor WordMap where
     fmap f Empty = Empty
-    fmap f (NonEmpty min node) = NonEmpty min (fmap f node)
+    fmap f (NonEmpty min minV node) = NonEmpty min (f minV) (fmap f node)
 
 instance Functor Node where
-    fmap f (Tip x) = Tip (f x)
-    fmap f (Bin bound l r) = Bin bound (fmap f l) (fmap f r)
+    fmap f Tip = Tip
+    fmap f (Bin k v l r) = Bin k (f v) (fmap f l) (fmap f r)
 
 instance Data.Foldable.Foldable WordMap where
     foldMap f Empty = mempty
-    foldMap f (NonEmpty _ node) = Data.Foldable.foldMap f node
-    
+    foldMap f (NonEmpty _ v node) = f v `mappend` goL node
+      where
+        goL Tip = mempty
+        goL (Bin _ v l r) = goL l `mappend` goR r `mappend` f v
+        
+        goR Tip = mempty
+        goR (Bin _ v l r) = f v `mappend` goL l `mappend` goR r
+    {-
     foldr = foldr
     foldr' = foldr'
     foldl = foldl
-    foldl' = foldl'
-
-instance Data.Foldable.Foldable Node where
-    foldMap f (Tip x) = f x
-    foldMap f (Bin _ l r) = Data.Foldable.foldMap f l `mappend` Data.Foldable.foldMap f r
+    foldl' = foldl'-}
 
 instance Traversable WordMap where
     traverse f Empty = pure Empty
-    traverse f (NonEmpty min node) = NonEmpty min <$> traverse f node
-
-instance Traversable Node where
-    traverse f (Tip x) = Tip <$> f x
-    traverse f (Bin bound l r) = Bin bound <$> traverse f l <*> traverse f r
-
+    traverse f (NonEmpty min minV node) = NonEmpty min <$> f minV <*> goL node
+      where
+        goL Tip = pure Tip
+        goL (Bin max maxV l r) = (\l' r' v' -> Bin max v' l' r') <$> goL l <*> goR r <*> f maxV
+        
+        goR Tip = pure Tip
+        goR (Bin min minV l r) = Bin min <$> f minV <*> goL l <*> goR r
+{-
 instance Monoid (WordMap a) where
     mempty = empty
     mappend = union
-
+-}
 instance NFData a => NFData (WordMap a) where
     rnf Empty = ()
-    rnf (NonEmpty _ n) = rnf n
+    rnf (NonEmpty _ v n) = rnf v `seq` rnf n
 
 instance NFData a => NFData (Node a) where
-    rnf (Tip x) = rnf x
-    rnf (Bin _ l r) = rnf l `seq` rnf r
+    rnf Tip = ()
+    rnf (Bin _ v l r) = rnf v `seq` rnf l `seq` rnf r
 
 -- | /O(min(n,W))/. Find the value at a key.
 -- Calls 'error' when the element can not be found.
@@ -83,15 +87,15 @@ null _ = False
 -- | /O(n)/. Number of elements in the map.
 size :: WordMap a -> Int
 size Empty = 0
-size (NonEmpty _ node) = sizeNode node where
-    sizeNode (Tip _) = 1
-    sizeNode (Bin _ l r) = sizeNode l + sizeNode r
+size (NonEmpty _ _ node) = sizeNode node where
+    sizeNode Tip = 1
+    sizeNode (Bin _ _ l r) = sizeNode l + sizeNode r
 
 -- | /O(1)/. Find the smallest and largest key in the map.
 bounds :: WordMap a -> Maybe (Key, Key)
 bounds Empty = Nothing
-bounds (NonEmpty min (Tip _)) = Just (min, min)
-bounds (NonEmpty min (Bin max _ _)) = Just (min, max)
+bounds (NonEmpty min _ Tip) = Just (min, min)
+bounds (NonEmpty min _ (Bin max _ _ _)) = Just (min, max)
 
 -- TODO: Is there a good way to unify the 'lookup'-like functions?
 
@@ -100,20 +104,20 @@ member :: Key -> WordMap a -> Bool
 member k = k `seq` start
   where
     start Empty = False
-    start (NonEmpty min node)
+    start (NonEmpty min _ node)
         | k < min = False
         | k == min = True
         | otherwise = goL (xor min k) min node
     
-    goL !xorCache min (Tip x) = False
-    goL !xorCache min (Bin max l r)
+    goL !xorCache min Tip = False
+    goL !xorCache min (Bin max _ l r)
         | k > max = False
         | k == max = True
         | xorCache < xor k max = goL xorCache min l
         | otherwise = goR (xor k max) max r
     
-    goR !xorCache max (Tip x) = False
-    goR !xorCache max (Bin min l r)
+    goR !xorCache max Tip = False
+    goR !xorCache max (Bin min _ l r)
         | k < min = False
         | k == min = True
         | xorCache < xor min k = goR xorCache max r
@@ -124,20 +128,20 @@ notMember :: Key -> WordMap a -> Bool
 notMember k = k `seq` start
   where
     start Empty = True
-    start (NonEmpty min node)
+    start (NonEmpty min _ node)
         | k < min = True
         | k == min = False
         | otherwise = goL (xor min k) min node
     
-    goL !xorCache min (Tip x) = True
-    goL !xorCache min (Bin max l r)
+    goL !xorCache min Tip = True
+    goL !xorCache min (Bin max _ l r)
         | k > max = True
         | k == max = False
         | xorCache < xor k max = goL xorCache min l
         | otherwise = goR (xor k max) max r
     
-    goR !xorCache max (Tip x) = True
-    goR !xorCache max (Bin min l r)
+    goR !xorCache max Tip = True
+    goR !xorCache max (Bin min _ l r)
         | k < min = True
         | k == min = False
         | xorCache < xor min k = goR xorCache max r
@@ -148,25 +152,24 @@ lookup :: Key -> WordMap a -> Maybe a
 lookup k = k `seq` start
   where
     start Empty = Nothing
-    start (NonEmpty min node)
+    start (NonEmpty min minV node)
         | k < min = Nothing
+        | k == min = Just minV
         | otherwise = goL (xor min k) min node
     
-    goL !xorCache min (Tip x)
-        | k == min = Just x
-        | otherwise = Nothing
-    goL !xorCache min (Bin max l r)
+    goL !xorCache min Tip = Nothing
+    goL !xorCache min (Bin max maxV l r)
         | k > max = Nothing
+        | k == max = Just maxV
         | xorCache < xorCacheMax = goL xorCache min l
         | otherwise = goR xorCacheMax max r
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x)
-        | k == max = Just x
-        | otherwise = Nothing
-    goR !xorCache max (Bin min l r)
+    goR !xorCache max Tip = Nothing
+    goR !xorCache max (Bin min minV l r)
         | k < min = Nothing
+        | k == min = Just minV
         | xorCache < xorCacheMin = goR xorCache max r
         | otherwise = goL xorCacheMin min l
       where
@@ -179,30 +182,29 @@ findWithDefault :: a -> Key -> WordMap a -> a
 findWithDefault def k = k `seq` start
   where
     start Empty = def
-    start (NonEmpty min node)
+    start (NonEmpty min minV node)
         | k < min = def
+        | k == min = minV
         | otherwise = goL (xor min k) min node
     
-    goL !xorCache min (Tip x)
-        | k == min = x
-        | otherwise = def
-    goL !xorCache min (Bin max l r)
+    goL !xorCache min Tip = def
+    goL !xorCache min (Bin max maxV l r)
         | k > max = def
+        | k == max = maxV
         | xorCache < xorCacheMax = goL xorCache min l
         | otherwise = goR xorCacheMax max r
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x)
-        | k == max = x
-        | otherwise = def
-    goR !xorCache max (Bin min l r)
+    goR !xorCache max Tip = def
+    goR !xorCache max (Bin min minV l r)
         | k < min = def
+        | k == min = minV
         | xorCache < xorCacheMin = goR xorCache max r
         | otherwise = goL xorCacheMin min l
       where
         xorCacheMin = xor min k
-
+{-
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
 --
@@ -362,55 +364,58 @@ lookupGE k = k `seq` start
     
     getMinV (Tip x) = x
     getMinV (Bin b l r) = getMinV l
-    
+   -} 
 -- | /O(1)/. The empty map.
 empty :: WordMap a
 empty = Empty
 
 -- | /O(1)/. A map of one element.
 singleton :: Key -> a -> WordMap a
-singleton k v = NonEmpty k (Tip v)
+singleton k v = NonEmpty k v Tip
 
 -- | /O(min(n,W))/. Insert a new key\/value pair in the map.
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value. 
 insert :: Key -> a -> WordMap a -> WordMap a
-insert !k v Empty = NonEmpty k (Tip v)
-insert !k v (NonEmpty min node)
-    | k < min = NonEmpty k (endL (xor min k) min node)
-    | otherwise = NonEmpty min (goL (xor min k) min node)
+insert !k v Empty = NonEmpty k v Tip
+insert !k v (NonEmpty min minV node)
+    | k < min = NonEmpty k v (endL (xor min k) min minV node)
+    | k == min = NonEmpty k v node
+    | otherwise = NonEmpty min minV (goL (xor min k) min node)
   where
     
-    goL !xorCache min (Tip x)
-        | k == min = Tip v
-        | otherwise = Bin k (Tip x) (Tip v)
-    goL !xorCache min (Bin max l r)
-        | k > max = if xor min max < xorCacheMax then Bin k (Bin max l r) (Tip v) else Bin k l (endR xorCacheMax max r)
-        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (goR xorCacheMax max r)
+    goL !xorCache min Tip = Bin k v Tip Tip
+    goL !xorCache min (Bin max maxV l r)
+        | k > max = if xor min max < xorCacheMax then Bin k v (Bin max maxV l r) Tip else Bin k v l (endR xorCacheMax max maxV r)
+        | k == max = Bin max v l r
+        | xorCache < xorCacheMax = Bin max maxV (goL xorCache min l) r
+        | otherwise = Bin max maxV l (goR xorCacheMax max r)
       where
         xorCacheMax = xor k max
 
-    goR !xorCache max (Tip x)
-        | k == max = Tip v
-        | otherwise = Bin k (Tip v) (Tip x)
-    goR !xorCache max (Bin min l r)
-        | k < min = if xor min max < xorCacheMin then Bin k (Tip v) (Bin min l r) else Bin k (endL xorCacheMin min l) r
-        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
-        | otherwise = Bin min (goL xorCacheMin min l) r
+    goR !xorCache max Tip = Bin k v Tip Tip
+    goR !xorCache max (Bin min minV l r)
+        | k < min = if xor min max < xorCacheMin then Bin k v Tip (Bin min minV l r) else Bin k v (endL xorCacheMin min minV l) r
+        | k == min = Bin min v l r
+        | xorCache < xorCacheMin = Bin min minV l (goR xorCache max r)
+        | otherwise = Bin min minV (goL xorCacheMin min l) r
       where
         xorCacheMin = xor min k
     
-    endL !xorCache min (Tip x) = Bin min (Tip v) (Tip x)
-    endL !xorCache min (Bin max l r)
-        | xor min max < xorCache = Bin max (Tip v) (Bin min l r)
-        | otherwise = Bin max (endL xorCache min l) r
+    endL !xorCache min minV = finishL
+      where
+        finishL Tip = Bin min minV Tip Tip
+        finishL (Bin max maxV l r)
+            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
+            | otherwise = Bin max maxV (finishL l) r
 
-    endR !xorCache max (Tip x) = Bin max (Tip x) (Tip v)
-    endR !xorCache max (Bin min l r)
-        | xor min max < xorCache = Bin min (Bin max l r) (Tip v)
-        | otherwise = Bin min l (endR xorCache max r)
-
+    endR !xorCache max maxV = finishR
+      where
+        finishR Tip = Bin max maxV Tip Tip
+        finishR (Bin min minV l r)
+            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
+            | otherwise = Bin min minV l (finishR r)
+{-
 -- | /O(min(n,W))/. Insert with a combining function.
 -- @'insertWith' f key value mp@
 -- will insert the pair (key, value) into @mp@ if key does
@@ -469,64 +474,64 @@ insertWith combine !k v (NonEmpty min node)
 -- > insertWithKey f 5 "xxx" empty                         == singleton 5 "xxx"
 insertWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
 insertWithKey f k = insertWith (f k) k
-
+-}
 -- | /O(min(n,W))/. Delete a key and its value from the map.
 -- When the key is not a member of the map, the original map is returned.
 delete :: Key -> WordMap a -> WordMap a
 delete k = k `seq` start
   where
     start Empty = Empty
-    start m@(NonEmpty min (Tip x))
+    start m@(NonEmpty min _ Tip)
         | k == min = Empty
         | otherwise = m
-    start m@(NonEmpty min (Bin max l r))
+    start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
-        | k == min = let DR min' root' = goDeleteMin max l r in NonEmpty min' root'
-        | otherwise = NonEmpty min (goL (xor min k) min (Bin max l r))
+        | k == min = let DR min' minV' root' = goDeleteMin max maxV l r in NonEmpty min' minV' root'
+        | otherwise = NonEmpty min minV (goL (xor min k) min root)
     
-    goL !xorCache min n@(Tip _) = n
-    goL !xorCache min n@(Bin max l r)
-        | k > max = Bin max l r
+    goL !xorCache min Tip = Tip
+    goL !xorCache min n@(Bin max maxV l r)
+        | k > max = n
         | k == max = case r of
-            Tip _ -> l
-            Bin minI lI rI -> let DR max' r' = goDeleteMax minI lI rI
-                              in  Bin max' l r'
-        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (goR xorCacheMax max r)
+            Tip -> l
+            Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                                    in  Bin max' maxV' l r'
+        | xorCache < xorCacheMax = Bin max maxV (goL xorCache min l) r
+        | otherwise = Bin max maxV l (goR xorCacheMax max r)
       where xorCacheMax = xor k max
     
-    goR !xorCache max n@(Tip _) = n
-    goR !xorCache max n@(Bin min l r)
+    goR !xorCache max Tip = Tip
+    goR !xorCache max n@(Bin min minV l r)
         | k < min = n
         | k == min = case l of
-            Tip _ -> r
-            Bin maxI lI rI -> let DR min' l' = goDeleteMin maxI lI rI
-                              in  Bin min' l' r
-        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
-        | otherwise = Bin max (goL xorCacheMin min l) r
+            Tip -> r
+            Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                                    in  Bin min' minV' l' r
+        | xorCache < xorCacheMin = Bin min minV l (goR xorCache max r)
+        | otherwise = Bin min minV (goL xorCacheMin min l) r
       where xorCacheMin = xor min k
     
-    goDeleteMin max l r = case l of
-        Tip _ -> case r of
-            Tip _ -> DR max r
-            Bin min l' r' -> DR min (Bin max l' r')
-        Bin maxI lI rI -> let DR min l' = goDeleteMin maxI lI rI
-                          in  DR min (Bin max l' r)
+    goDeleteMin max maxV l r = case l of
+        Tip -> case r of
+            Tip -> DR max maxV r
+            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
+        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
+                                in  DR min minV (Bin max maxV l' r)
     
-    goDeleteMax min l r = case r of
-        Tip _ -> case l of
-            Tip _ -> DR min l
-            Bin max l' r' -> DR max (Bin min l' r')
-        Bin minI lI rI -> let DR max r' = goDeleteMax minI lI rI
-                          in  DR max (Bin min l r')
+    goDeleteMax min minV l r = case r of
+        Tip -> case l of
+            Tip -> DR min minV l
+            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
+        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
+                                in  DR max maxV (Bin min minV l r')
 
 -- TODO: Does a strict pair work? My guess is not, as GHC was already
 -- unboxing the tuple, but it would be simpler to use one of those.
 -- | Without this specialized type (I was just using a tuple), GHC's
 -- CPR correctly unboxed the tuple, but it couldn't unbox the returned
 -- Key, leading to lots of inefficiency (3x slower than stock Data.WordMap)
-data DeleteResult a = DR {-# UNPACK #-} !Key !(Node a)
-
+data DeleteResult a = DR {-# UNPACK #-} !Key a !(Node a)
+{-
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
 --
@@ -808,20 +813,6 @@ intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL mi
             GT | ltMSB (xor min2 max1) (xor min1 max1) -> goR max1 r1 max2 (Bin min2 l2 r2)
                | otherwise -> flipBounds $ goL min1 l1 min2 (Bin max2 l2 r2)
     
-    binL Empty Empty = Empty
-    binL Empty r = flipBounds r
-    binL l Empty = l
-    binL (NonEmpty min l) (NonEmpty max r) = NonEmpty min (Bin max l r)
-    
-    binR Empty Empty = Empty
-    binR Empty r = r
-    binR l Empty = flipBounds l
-    binR (NonEmpty min l) (NonEmpty max r) = NonEmpty max (Bin min l r)
-    
-    flipBounds Empty = Empty
-    flipBounds n@(NonEmpty b1 (Tip x)) = n
-    flipBounds (NonEmpty b1 (Bin b2 l r)) = NonEmpty b2 (Bin b1 l r)
-    
     finishLL k v min = endLL k v (xor k min) min
     finishRL k v max = endRL k v (xor k max) max
     finishLR k v min = endLR k v (xor k min) min
@@ -1102,7 +1093,7 @@ foldlWithKey' f z = start
     
     goR max (Tip x) !acc = f acc max x
     goR max (Bin min l r) !acc = goR max r (goL min l acc)
-
+-}
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
 fromList = Data.Foldable.foldr (uncurry insert) empty
@@ -1110,26 +1101,110 @@ fromList = Data.Foldable.foldr (uncurry insert) empty
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Key, a)]
 toList Empty = []
-toList (NonEmpty min node) = goL min node [] where
-    goL min (Tip x) rest = (min, x) : rest
-    goL min (Bin max l r) rest = goL min l (goR max r rest)
+toList (NonEmpty min minV node) = (min, minV) : goL node [] where
+    goL Tip rest = rest
+    goL (Bin max maxV l r) rest = goL l $ goR r $ (max, maxV) : rest
     
-    goR max (Tip x) rest = (max, x) : rest
-    goR max (Bin min l r) rest = goL min l (goR max r rest)
+    goR Tip rest = rest
+    goR (Bin min minV l r) rest = (min, minV) : (goL l $ goR r $ rest)
+{-
+-- | /O(n)/. Filter all values that satisfy some predicate.
+--
+-- > filter (> "a") (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
+-- > filter (> "x") (fromList [(5,"a"), (3,"b")]) == empty
+-- > filter (< "a") (fromList [(5,"a"), (3,"b")]) == empty
+filter :: (a -> Bool) -> WordMap a -> WordMap a
+filter p = filterWithKey (const p)
 
+-- | /O(n)/. Filter all keys\/values that satisfy some predicate.
+--
+-- > filterWithKey (\k _ -> k > 4) (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
+filterWithKey :: (Key -> a -> Bool) -> WordMap a -> WordMap a
+filterWithKey p = start
+  where
+    start Empty = Empty
+    start (NonEmpty min root) = goL min root
+    
+    goL min (Tip x)
+        | p min x = NonEmpty min (Tip x)
+        | otherwise = Empty
+    goL min (Bin max l r) = binL (goL min l) (goR max r)
+    
+    goR max (Tip x)
+        | p max x = NonEmpty max (Tip x)
+        | otherwise = Empty
+    goR max (Bin min l r) = binR (goL min l) (goR max r)
+
+-- | /O(n)/. Partition the map according to some predicate. The first
+-- map contains all elements that satisfy the predicate, the second all
+-- elements that fail the predicate. See also 'split'.
+--
+-- > partition (> "a") (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", singleton 5 "a")
+-- > partition (< "x") (fromList [(5,"a"), (3,"b")]) == (fromList [(3, "b"), (5, "a")], empty)
+-- > partition (> "x") (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3, "b"), (5, "a")])
+partition :: (a -> Bool) -> WordMap a -> (WordMap a, WordMap a)
+partition p = partitionWithKey (const p)
+
+-- | /O(n)/. Partition the map according to some predicate. The first
+-- map contains all elements that satisfy the predicate, the second all
+-- elements that fail the predicate. See also 'split'.
+--
+-- > partitionWithKey (\ k _ -> k > 3) (fromList [(5,"a"), (3,"b")]) == (singleton 5 "a", singleton 3 "b")
+-- > partitionWithKey (\ k _ -> k < 7) (fromList [(5,"a"), (3,"b")]) == (fromList [(3, "b"), (5, "a")], empty)
+-- > partitionWithKey (\ k _ -> k > 7) (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3, "b"), (5, "a")])
+partitionWithKey :: (Key -> a -> Bool) -> WordMap a -> (WordMap a, WordMap a)
+partitionWithKey p = start
+  where
+    start Empty = Empty
+    start (NonEmpty min root) = goL min root
+    
+    goL min (Tip x)
+        | p min x = (NonEmpty min (Tip x), Empty)
+        | otherwise = (Empty, NonEmpty min (Tip x))
+    goL min (Bin max l r) = let (lt, lf) = goL min l
+                                (rt, rf) = goR max r
+                            in  (binL lt rt, binR lf rf)
+    
+    goR max (Tip x)
+        | p max x = (NonEmpty max (Tip x), Empty)
+        | otherwise = (Empty, NonEmpty max (Tip x))
+    goR max (Bin min l r) = let (lt, lf) = goL min l
+                                (rt, rf) = goR max r
+                            in  (binL lt rt, binR lf rf)
+
+splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
+splitLookup k = k `seq` start
+  where
+    start Empty = (Empty, Nothing, Empty)
+    start (NonEmpty min root)
+        | k < min = (Empty, Nothing, NonEmpty min root)
+        | otherwise = goL (xor min k) min root
+    
+    goL !xorCache min (Tip x)
+        | k == min = (Empty, Just x, Empty)
+        | otherwise = (NonEmpty min (Tip x), Nothing, Empty)
+    goL !xorCache min n@(Bin max l r)
+        | k > max = (NonEmpty min n, Nothing, Empty)
+        | xorCache < xorCacheMax = let (ll, lv, lr) = goL xorCache min l
+                                   in  (ll, lv, Bin max lr r)
+        | otherwise              = let (rl, rv, rr) = goR xorCacheMax max r
+                                   in  (Bin max l rl, rv, rr)
+      where
+        xorCacheMax = xor k max
+-}
 ----------------------------
 
 -- | Show the tree that implements the map.
 showTree :: Show a => WordMap a -> String
 showTree = unlines . aux where
     aux Empty = []
-    aux (NonEmpty min node) = show min : auxNode False node
-    auxNode _ (Tip x) = ["+->" ++ show x]
-    auxNode lined (Bin bound l r) = ["+--" ++ show bound, prefix : "  |"] ++ fmap indent (auxNode True l) ++ [prefix : "  |"] ++ fmap indent (auxNode False r)
+    aux (NonEmpty min minV node) = (show min ++ " " ++ show minV) : auxNode False node
+    auxNode _ Tip = ["+-."]
+    auxNode lined (Bin bound val l r) = ["+--" ++ show bound ++ " " ++ show val, prefix : "  |"] ++ fmap indent (auxNode True l) ++ [prefix : "  |"] ++ fmap indent (auxNode False r)
       where
         prefix = if lined then '|' else ' '
         indent r = prefix : "  " ++ r
-
+{-
 valid :: WordMap a -> Bool
 valid Empty = True
 valid (NonEmpty min root) = allKeys (> min) root && goL min root
@@ -1165,3 +1240,18 @@ compareMSB x y = case compare x y of
     LT | x < xor x y -> LT
     GT | y < xor x y -> GT
     _ -> EQ
+
+binL :: WordMap a -> WordMap a -> WordMap a
+binL Empty r = flipBounds r
+binL l Empty = l
+binL (NonEmpty min l) (NonEmpty max r) = NonEmpty min (Bin max l r)
+
+binR :: WordMap a -> WordMap a -> WordMap a
+binR Empty r = r
+binR l Empty = flipBounds l
+binR (NonEmpty min l) (NonEmpty max r) = NonEmpty max (Bin min l r)
+
+flipBounds Empty = Empty
+flipBounds n@(NonEmpty b1 (Tip x)) = n
+flipBounds (NonEmpty b1 (Bin b2 l r)) = NonEmpty b2 (Bin b1 l r)
+-}

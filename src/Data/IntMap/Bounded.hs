@@ -20,12 +20,12 @@ module Data.IntMap.Bounded (
     
     -- ** Insertion
     , insert
-    , insertWith
-    , insertWithKey
+{-    , insertWith
+    , insertWithKey-}
     
     -- ** Delete\/Update
     , delete
-    , adjust
+{-    , adjust
     , adjustWithKey
     , update
     , updateWithKey
@@ -44,15 +44,15 @@ module Data.IntMap.Bounded (
     -- * Traversal
     -- ** Map
     , map
-    , mapWithKey
+    , mapWithKey-}
     
     -- * Conversions
-    , toList
+{-    , toList-}
     , fromList
     
     -- * Debugging
     , showTree
-    , valid
+{-    , valid-}
 ) where
 
 import Control.DeepSeq
@@ -73,7 +73,7 @@ newtype IntMap a = IntMap (W.WordMap a)
 
 instance Functor IntMap where
     fmap f (IntMap m) = IntMap (fmap f m)
-
+{-
 instance Foldable IntMap where
     foldMap f (IntMap Empty) = mempty
     foldMap f (IntMap (NonEmpty min (Tip x))) = f x
@@ -91,7 +91,7 @@ instance Traversable IntMap where
 instance Monoid (IntMap a) where
     mempty = IntMap mempty
     mappend (IntMap m1) (IntMap m2) = IntMap (mappend m1 m2)
-
+-}
 instance NFData a => NFData (IntMap a) where
     rnf (IntMap m) = rnf m
 
@@ -121,16 +121,16 @@ singleton k v = IntMap (W.singleton (fromIntegral k) v)
 
 insert :: Key -> a -> IntMap a -> IntMap a
 insert k v (IntMap m) = IntMap (W.insert (fromIntegral k) v m)
-
+{-
 insertWith :: (a -> a -> a) -> Key -> a -> IntMap a -> IntMap a
 insertWith f k v (IntMap m) = IntMap (W.insertWith f (fromIntegral k) v m)
 
 insertWithKey :: (Key -> a -> a -> a) -> Key -> a -> IntMap a -> IntMap a
 insertWithKey f k = insertWith (f k) k
-
+-}
 delete :: Key -> IntMap a -> IntMap a
 delete k (IntMap m) = IntMap (W.delete (fromIntegral k) m)
-
+{-
 adjust :: (a -> a) -> Key -> IntMap a -> IntMap a
 adjust f k (IntMap m) = IntMap (W.adjust f (fromIntegral k) m)
 
@@ -184,12 +184,13 @@ toList m@(IntMap (NonEmpty min (Bin max l r)))
     
     goR max (Tip x) = ((fromIntegral max, x):)
     goR max (Bin min l r) = goL min l . goR max r
-
+-}
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . fmap (\(k, v) -> (fromIntegral k, v))
 
 showTree :: Show a => IntMap a -> String
 showTree (IntMap m) = W.showTree m
-
+{-
 valid :: IntMap a -> Bool
 valid (IntMap m) = W.valid m
+-}

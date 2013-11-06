@@ -18,10 +18,10 @@ module Data.WordMap (
     , notMember
     , lookup
     , findWithDefault
-    , lookupLT
+{-    , lookupLT
     , lookupGT
     , lookupLE
-    , lookupGE
+    , lookupGE-}
     
     -- * Construction
     , empty
@@ -29,12 +29,12 @@ module Data.WordMap (
     
     -- ** Insertion
     , insert
-    , insertWith
-    , insertWithKey
+{-    , insertWith
+    , insertWithKey-}
     
     -- ** Delete\/Update
     , delete
-    , adjust
+{-    , adjust
     , adjustWithKey
     , update
     , updateWithKey
@@ -70,15 +70,21 @@ module Data.WordMap (
     , foldr'
     , foldl'
     , foldrWithKey'
-    , foldlWithKey'
+    , foldlWithKey'-}
     
     -- * Conversion
     , toList
     , fromList
     
+    -- * Filter
+{-    , filter
+    , filterWithKey
+    , partition
+    , partitionWithKey-}
+    
     -- * Debugging
     , showTree
-    , valid
+{-    , valid-}
 ) where
 
 import Data.WordMap.Internal

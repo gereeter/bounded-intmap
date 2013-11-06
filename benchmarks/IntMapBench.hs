@@ -38,10 +38,10 @@ main = do
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m keys) denseW
                 ]
-            , bgroup "update"
+{-            , bgroup "update"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m keys) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m keys) denseW
-                ]
+                ]-}
             ]
         , bgroup "absent"
             [ bgroup "lookup"
@@ -60,10 +60,10 @@ main = do
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m sKeysSearch) sparseW
                 ]
-            , bgroup "update"
+{-            , bgroup "update"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m sKeysSearch) sparseW
-                ]
+                ]-}
             ]
         ]
   where
