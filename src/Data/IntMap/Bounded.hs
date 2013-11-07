@@ -20,8 +20,8 @@ module Data.IntMap.Bounded (
     
     -- ** Insertion
     , insert
-{-    , insertWith
-    , insertWithKey-}
+    , insertWith
+    , insertWithKey
     
     -- ** Delete\/Update
     , delete
@@ -121,13 +121,13 @@ singleton k v = IntMap (W.singleton (fromIntegral k) v)
 
 insert :: Key -> a -> IntMap a -> IntMap a
 insert k v (IntMap m) = IntMap (W.insert (fromIntegral k) v m)
-{-
+
 insertWith :: (a -> a -> a) -> Key -> a -> IntMap a -> IntMap a
 insertWith f k v (IntMap m) = IntMap (W.insertWith f (fromIntegral k) v m)
 
 insertWithKey :: (Key -> a -> a -> a) -> Key -> a -> IntMap a -> IntMap a
 insertWithKey f k = insertWith (f k) k
--}
+
 delete :: Key -> IntMap a -> IntMap a
 delete k (IntMap m) = IntMap (W.delete (fromIntegral k) m)
 {-

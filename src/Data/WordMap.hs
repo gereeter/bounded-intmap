@@ -29,8 +29,8 @@ module Data.WordMap (
     
     -- ** Insertion
     , insert
-{-    , insertWith
-    , insertWithKey-}
+    , insertWith
+    , insertWithKey
     
     -- ** Delete\/Update
     , delete
