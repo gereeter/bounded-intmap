@@ -385,12 +385,13 @@ singleton k v = NonEmpty k v Tip
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value. 
 insert :: Key -> a -> WordMap a -> WordMap a
-insert !k v Empty = NonEmpty k v Tip
-insert !k v (NonEmpty min minV node)
-    | k < min = NonEmpty k v (endL (xor min k) min minV node)
-    | k == min = NonEmpty k v node
-    | otherwise = NonEmpty min minV (goL (xor min k) min node)
+insert k v = k `seq` start
   where
+    start Empty = NonEmpty k v Tip
+    start (NonEmpty min minV root)
+        | k > min = NonEmpty min minV (goL (xor min k) min root)
+        | k < min = NonEmpty k v (endL (xor min k) min minV root)
+        | otherwise = NonEmpty k v root
     
     goL !xorCache min Tip = Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
