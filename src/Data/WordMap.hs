@@ -48,7 +48,7 @@ module Data.WordMap (
     -- ** Intersection
     , intersection
     , intersectionWith
-    , intersectionWithKey
+    , intersectionWithKey-}
     
     -- * Traversal
     -- ** Map
@@ -60,7 +60,7 @@ module Data.WordMap (
     , mapAccumRWithKey
     
     -- ** Folds
-    , foldr
+{-    , foldr
     , foldl
     , foldrWithKey
     , foldlWithKey

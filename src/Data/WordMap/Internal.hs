@@ -878,7 +878,7 @@ intersectionWithKey combine (NonEmpty min1 root1) (NonEmpty min2 root2) = goL mi
         | k < min = Empty
         | ltMSB xorCache (xor min max) = endRR k v xorCache max r
         | otherwise = finishLR k v min l
-
+-}
 -- | /O(n)/. Map a function over all values in the map.
 --
 -- > map (++ "x") (fromList [(5,"a"), (3,"b")]) == fromList [(3, "bx"), (5, "ax")]
@@ -891,13 +891,10 @@ map = fmap
 -- > mapWithKey f (fromList [(5,"a"), (3,"b")]) == fromList [(3, "3:b"), (5, "5:a")]
 mapWithKey :: (Key -> a -> b) -> WordMap a -> WordMap b
 mapWithKey f Empty = Empty
-mapWithKey f (NonEmpty min root) = NonEmpty min (goL min root)
+mapWithKey f (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
   where
-    goL min (Tip x) = Tip (f min x)
-    goL min (Bin max l r) = Bin max (goL min l) (goR max r)
-    
-    goR max (Tip x) = Tip (f max x)
-    goR max (Bin min l r) = Bin min (goL min l) (goR max r)
+    go Tip = Tip
+    go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
 
 -- | /O(n)/.
@@ -909,13 +906,13 @@ mapWithKey f (NonEmpty min root) = NonEmpty min (goL min root)
 -- > traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(2, 'c')])           == Nothing
 traverseWithKey :: Applicative f => (Key -> a -> f b) -> WordMap a -> f (WordMap b)
 traverseWithKey f Empty = pure Empty
-traverseWithKey f (NonEmpty min root) = NonEmpty min <$> goL min root
+traverseWithKey f (NonEmpty min minV root) = NonEmpty min <$> f min minV <*> goL min root
   where
-    goL min (Tip x) = Tip <$> f min x
-    goL min (Bin max l r) = Bin max <$> goL min l <*> goR max r
+    goL min Tip = pure Tip
+    goL min (Bin max maxV l r) = (\l' r' maxV' -> Bin max maxV' l' r') <$> goL min l <*> goR max r <*> f max maxV
     
-    goR max (Tip x) = Tip <$> f max x
-    goR max (Bin min l r) = Bin max <$> goL min l <*> goR max r
+    goR max Tip = pure Tip
+    goR max (Bin min minV l r) = Bin min <$> f min minV <*> goL min l <*> goR max r
 
 -- | /O(n)/. The function @'mapAccum'@ threads an accumulating
 -- argument through the map in ascending order of keys.
@@ -932,46 +929,48 @@ mapAccum f = mapAccumWithKey (\a _ x -> f a x)
 -- > mapAccumWithKey f "Everything:" (fromList [(5,"a"), (3,"b")]) == ("Everything: 3-b 5-a", fromList [(3, "bX"), (5, "aX")])
 mapAccumWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
 mapAccumWithKey f a Empty = (a, Empty)
-mapAccumWithKey f a (NonEmpty min root) = let (a', root') = goL min root a in (a', NonEmpty min root')
+mapAccumWithKey f a (NonEmpty min minV root) =
+    let (a',  minV') = f a min minV
+        (a'', root') = goL min root a'
+    in  (a'', NonEmpty min minV' root')
   where
-    goL min (Tip x) a =
-        let (a', x') = f a min x
-        in  (a', Tip x')
-    goL min (Bin max l r) a =
-        let (a',  l') = goL min l a
-            (a'', r') = goR max r a'
-        in  (a'', Bin max l' r')
+    goL min Tip a = (a, Tip)
+    goL min (Bin max maxV l r) a =
+        let (a',   l') = goL min l a
+            (a'',  r') = goR max r a'
+            (a''', maxV') = f a'' max maxV
+        in  (a''', Bin max maxV' l' r')
     
-    goR max (Tip x) a =
-        let (a', x') = f a max x
-        in  (a', Tip x')
-    goR max (Bin min l r) a =
-        let (a',  l') = goL min l a
-            (a'', r') = goR max r a'
-        in  (a'', Bin min l' r')
+    goR max Tip a = (a, Tip)
+    goR max (Bin min minV l r) a =
+        let (a',   minV') = f a min minV
+            (a'',   l') = goL min l a'
+            (a''',  r') = goR max r a''
+        in  (a''', Bin min minV' l' r')
 
 -- | /O(n)/. The function @'mapAccumRWithKey'@ threads an accumulating
 -- argument through the map in descending order of keys.
 mapAccumRWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
 mapAccumRWithKey f a Empty = (a, Empty)
-mapAccumRWithKey f a (NonEmpty min root) = let (a', root') = goL min root a in (a', NonEmpty min root')
+mapAccumRWithKey f a (NonEmpty min minV root) = 
+    let (a',  root') = goL min root a
+        (a'', minV') = f a' min minV
+    in  (a'', NonEmpty min minV' root')
   where
-    goL min (Tip x) a =
-        let (a', x') = f a min x
-        in  (a', Tip x')
-    goL min (Bin max l r) a =
-        let (a',  r') = goR max r a
-            (a'', l') = goL min l a'
-        in  (a'', Bin max l' r')
+    goL min Tip a = (a, Tip)
+    goL min (Bin max maxV l r) a =
+        let (a',   maxV') = f a max maxV
+            (a'',  r') = goR max r a'
+            (a''', l') = goL min l a''
+        in  (a''', Bin max maxV' l' r')
     
-    goR max (Tip x) a =
-        let (a', x') = f a max x
-        in  (a', Tip x')
-    goR max (Bin min l r) a =
-        let (a',  r') = goR max r a
-            (a'', l') = goL min l a'
-        in  (a'', Bin min l' r')
-
+    goR max Tip a = (a, Tip)
+    goR max (Bin min minV l r) a =
+        let (a',   r') = goR max r a
+            (a'',  l') = goL min l a'
+            (a''', minV') = f a'' min minV
+        in  (a''', Bin min minV' l' r')
+{-
 -- | /O(n)/. Fold the values in the map using the given right-associative
 -- binary operator, such that @'foldr' f z == 'Prelude.foldr' f z . 'elems'@.
 --
