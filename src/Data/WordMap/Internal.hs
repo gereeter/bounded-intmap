@@ -597,7 +597,7 @@ adjust f k = k `seq` start
 -- > adjustWithKey f 7 empty                         == empty
 adjustWithKey :: (Key -> a -> a) -> Key -> WordMap a -> WordMap a
 adjustWithKey f k = adjust (f k) k
-{-
+
 -- | /O(min(n,W))/. The expression (@'update' f k map@) updates the value @x@
 -- at @k@ (if it is in the map). If (@f x@) is 'Nothing', the element is
 -- deleted. If it is (@'Just' y@), the key @k@ is bound to the new value @y@.
@@ -610,53 +610,60 @@ update :: (a -> Maybe a) -> Key -> WordMap a -> WordMap a
 update f k = k `seq` start
   where
     start Empty = Empty
-    start m@(NonEmpty min (Tip x))
-        | k == min = Empty
+    start m@(NonEmpty min minV Tip)
+        | k == min = case f minV of
+            Nothing -> Empty
+            Just minV' -> NonEmpty min minV' Tip
         | otherwise = m
-    start m@(NonEmpty min (Bin max l r))
+    start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
-        | k == min = let DR min' root' = goMin max l r in NonEmpty min' root'
-        | otherwise = NonEmpty min (goL (xor min k) min (Bin max l r))
+        | k == min = case f minV of
+            Nothing -> let DR min' minV' root' = goDeleteMin max maxV l r
+                       in NonEmpty min' minV' root'
+            Just minV' -> NonEmpty min minV' root
+        | otherwise = NonEmpty min minV (goL (xor min k) min root)
     
-    goL !xorCache min n@(Tip _) = n
-    goL !xorCache min n@(Bin max l r)
-        | k > max = Bin max l r
-        | k == max = case r of
-            Tip _ -> l
-            Bin minI lI rI -> let DR max' r' = goMax minI lI rI
-                              in  Bin max' l r'
-        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (goR xorCacheMax max r)
+    goL !xorCache min Tip = Tip
+    goL !xorCache min n@(Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goL xorCache min l) r
+                    else Bin max maxV l (goR xorCacheMax max r)
+        | k > max = n
+        | otherwise = case f maxV of
+            Nothing -> case r of
+                Tip -> l
+                Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                                        in  Bin max' maxV' l r'
+            Just maxV' -> Bin max maxV' l r
       where xorCacheMax = xor k max
     
-    goR !xorCache max n@(Tip _) = n
-    goR !xorCache max n@(Bin min l r)
+    goR !xorCache max Tip = Tip
+    goR !xorCache max n@(Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goR xorCache max r)
+                    else Bin min minV (goL xorCacheMin min l) r
         | k < min = n
-        | k == min = case l of
-            Tip _ -> r
-            Bin maxI lI rI -> let DR min' l' = goMin maxI lI rI
-                              in  Bin min' l' r
-        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
-        | otherwise = Bin max (goL xorCacheMin min l) r
+        | otherwise = case f minV of
+            Nothing -> case l of
+                Tip -> r
+                Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                                        in  Bin min' minV' l' r
+            Just minV' -> Bin min minV' l r
       where xorCacheMin = xor min k
     
-    goMin max l r = case l of
-        Tip x -> case f x of
-            Nothing -> case r of
-                Tip _ -> DR max r
-                Bin min l' r' -> DR min (Bin max l' r')
-            Just x' -> DR k (Bin max (Tip x') r)
-        Bin maxI lI rI -> let DR min l' = goMin maxI lI rI
-                          in  DR min (Bin max l' r)
+    goDeleteMin max maxV l r = case l of
+        Tip -> case r of
+            Tip -> DR max maxV r
+            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
+        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
+                                in  DR min minV (Bin max maxV l' r)
     
-    goMax min l r = case r of
-        Tip x -> case f x of
-            Nothing -> case l of
-                Tip _ -> DR min l
-                Bin max l' r' -> DR max (Bin min l' r')
-            Just x' -> DR k (Bin min l (Tip x'))
-        Bin minI lI rI -> let DR max r' = goMax minI lI rI
-                          in  DR max (Bin min l r')
+    goDeleteMax min minV l r = case r of
+        Tip -> case l of
+            Tip -> DR min minV l
+            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
+        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
+                                in  DR max maxV (Bin min minV l r')
 
 -- | /O(min(n,W))/. The expression (@'updateWithKey' f k map@) updates the value @x@
 -- at @k@ (if it is in the map). If (@f k x@) is 'Nothing', the element is
@@ -668,7 +675,7 @@ update f k = k `seq` start
 -- > updateWithKey f 3 (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 updateWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> WordMap a
 updateWithKey f k = update (f k) k
-
+{-
 -- | /O(n+m)/. The (left-biased) union of two maps.
 -- It prefers the first map when duplicate keys are encountered,
 -- i.e. (@'union' == 'unionWith' 'const'@).

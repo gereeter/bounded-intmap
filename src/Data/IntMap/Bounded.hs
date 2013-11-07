@@ -27,12 +27,12 @@ module Data.IntMap.Bounded (
     , delete
     , adjust
     , adjustWithKey
-{-    , update
+    , update
     , updateWithKey
     
     -- * Combine
     -- ** Union
-    , union
+{-    , union
     , unionWith
     , unionWithKey
     
@@ -137,14 +137,14 @@ adjust f k (IntMap m) = IntMap (W.adjust f (fromIntegral k) m)
 adjustWithKey :: (Key -> a -> a) -> Key -> IntMap a -> IntMap a
 adjustWithKey f k (IntMap m) = IntMap (W.adjustWithKey f' (fromIntegral k) m) where
     f' = f . fromIntegral
-{-
+
 update :: (a -> Maybe a) -> Key -> IntMap a -> IntMap a
 update f k (IntMap m) = IntMap (W.update f (fromIntegral k) m)
 
 updateWithKey :: (Key -> a -> Maybe a) -> Key -> IntMap a -> IntMap a
 updateWithKey f k (IntMap m) = IntMap (W.updateWithKey f' (fromIntegral k) m) where
     f' = f . fromIntegral
-
+{-
 union :: IntMap a -> IntMap a -> IntMap a
 union (IntMap m1) (IntMap m2) = IntMap (W.union m1 m2)
 

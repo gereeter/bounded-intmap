@@ -36,12 +36,12 @@ module Data.WordMap (
     , delete
     , adjust
     , adjustWithKey
-{-    , update
+    , update
     , updateWithKey
     
     -- * Combine
     -- ** Union
-    , union
+{-    , union
     , unionWith
     , unionWithKey
     
