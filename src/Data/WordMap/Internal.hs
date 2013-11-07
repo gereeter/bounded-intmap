@@ -116,8 +116,7 @@ member k = k `seq` start
                     else goR xorCacheMax max r
         | k > max = False
         | otherwise = True
-      where
-        xorCacheMax = xor k max
+      where xorCacheMax = xor k max
     
     goR !xorCache max Tip = False
     goR !xorCache max (Bin min _ l r)
@@ -126,8 +125,7 @@ member k = k `seq` start
                     else goL xorCacheMin min l
         | k < min = False
         | otherwise = True
-      where
-        xorCacheMin = xor min k
+      where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Is the key not a member of the map?
 notMember :: Key -> WordMap a -> Bool
@@ -146,8 +144,7 @@ notMember k = k `seq` start
                     else goR xorCacheMax max r
         | k > max = True
         | otherwise = False
-      where
-        xorCacheMax = xor k max
+      where xorCacheMax = xor k max
     
     goR !xorCache max Tip = True
     goR !xorCache max (Bin min _ l r)
@@ -156,8 +153,7 @@ notMember k = k `seq` start
                     else goL xorCacheMin min l
         | k < min = True
         | otherwise = False
-      where
-        xorCacheMin = xor min k
+      where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Lookup the value at a key in the map.
 lookup :: Key -> WordMap a -> Maybe a
@@ -176,8 +172,7 @@ lookup k = k `seq` start
                     else goR xorCacheMax max r
         | k > max = Nothing
         | otherwise = Just maxV
-      where
-        xorCacheMax = xor k max
+      where xorCacheMax = xor k max
     
     goR !xorCache max Tip = Nothing
     goR !xorCache max (Bin min minV l r)
@@ -186,8 +181,7 @@ lookup k = k `seq` start
                     else goL xorCacheMin min l
         | k < min = Nothing
         | otherwise = Just minV
-      where
-        xorCacheMin = xor min k
+      where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. The expression @findWithDefault def k map@ returns
 -- the value at key @k@ or returns @def@ when the key is not an element
@@ -208,8 +202,7 @@ findWithDefault def k = k `seq` start
                     else goR xorCacheMax max r
         | k > max = def
         | otherwise = maxV
-      where
-        xorCacheMax = xor k max
+      where xorCacheMax = xor k max
     
     goR !xorCache max Tip = def
     goR !xorCache max (Bin min minV l r)
@@ -218,8 +211,7 @@ findWithDefault def k = k `seq` start
                     else goL xorCacheMin min l
         | k < min = def
         | otherwise = minV
-      where
-        xorCacheMin = xor min k
+      where  xorCacheMin = xor min k
 {-
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
@@ -405,20 +397,22 @@ insert !k v (NonEmpty min minV node)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
                     else Bin max maxV l (goR xorCacheMax max r)
-        | k > max = if xor min max < xorCacheMax then Bin k v (Bin max maxV l r) Tip else Bin k v l (endR xorCacheMax max maxV r)
+        | k > max = if xor min max < xorCacheMax
+                    then Bin k v (Bin max maxV l r) Tip
+                    else Bin k v l (endR xorCacheMax max maxV r)
         | otherwise = Bin max v l r
-      where
-        xorCacheMax = xor k max
+      where xorCacheMax = xor k max
 
     goR !xorCache max Tip = Bin k v Tip Tip
     goR !xorCache max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
                     else Bin min minV (goL xorCacheMin min l) r
-        | k < min = if xor min max < xorCacheMin then Bin k v Tip (Bin min minV l r) else Bin k v (endL xorCacheMin min minV l) r
+        | k < min = if xor min max < xorCacheMin
+                    then Bin k v Tip (Bin min minV l r)
+                    else Bin k v (endL xorCacheMin min minV l) r
         | otherwise = Bin min v l r
-      where
-        xorCacheMin = xor min k
+      where xorCacheMin = xor min k
     
     endL !xorCache min minV = finishL
       where
