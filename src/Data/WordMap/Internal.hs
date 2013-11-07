@@ -554,7 +554,7 @@ delete k = k `seq` start
 -- CPR correctly unboxed the tuple, but it couldn't unbox the returned
 -- Key, leading to lots of inefficiency (3x slower than stock Data.WordMap)
 data DeleteResult a = DR {-# UNPACK #-} !Key a !(Node a)
-{-
+
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
 --
@@ -565,29 +565,28 @@ adjust :: (a -> a) -> Key -> WordMap a -> WordMap a
 adjust f k = k `seq` start
   where
     start Empty = Empty
-    start m@(NonEmpty min node)
+    start m@(NonEmpty min minV node)
+        | k > min = NonEmpty min minV (goL (xor min k) min node)
         | k < min = m
-        | otherwise = NonEmpty min (goL (xor min k) min node)
+        | otherwise = NonEmpty min (f minV) node
     
-    goL !xorCache min n@(Tip x)
-        | k == min = Tip (f x)
-        | otherwise = n
-    goL !xorCache min n@(Bin max l r)
+    goL !xorCache min Tip = Tip
+    goL !xorCache min n@(Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goL xorCache min l) r
+                    else Bin max maxV l (goR xorCacheMax max r)
         | k > max = n
-        | xorCache < xorCacheMax = Bin max (goL xorCache min l) r
-        | otherwise = Bin max l (goR xorCacheMax max r)
-      where
-        xorCacheMax = xor k max
+        | otherwise = Bin max (f maxV) l r
+      where xorCacheMax = xor k max
     
-    goR !xorCache max n@(Tip x)
-        | k == max = Tip (f x)
-        | otherwise = n
-    goR !xorCache max n@(Bin min l r)
+    goR !xorCache max Tip = Tip
+    goR !xorCache max n@(Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goR xorCache max r)
+                    else Bin min minV (goL xorCacheMin min l) r
         | k < min = n
-        | xorCache < xorCacheMin = Bin min l (goR xorCache max r)
-        | otherwise = Bin min (goL xorCacheMin min l) r
-      where
-        xorCacheMin = xor min k
+        | otherwise = Bin min (f minV) l r
+      where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
@@ -598,7 +597,7 @@ adjust f k = k `seq` start
 -- > adjustWithKey f 7 empty                         == empty
 adjustWithKey :: (Key -> a -> a) -> Key -> WordMap a -> WordMap a
 adjustWithKey f k = adjust (f k) k
-
+{-
 -- | /O(min(n,W))/. The expression (@'update' f k map@) updates the value @x@
 -- at @k@ (if it is in the map). If (@f x@) is 'Nothing', the element is
 -- deleted. If it is (@'Just' y@), the key @k@ is bound to the new value @y@.

@@ -34,9 +34,9 @@ module Data.WordMap (
     
     -- ** Delete\/Update
     , delete
-{-    , adjust
+    , adjust
     , adjustWithKey
-    , update
+{-    , update
     , updateWithKey
     
     -- * Combine

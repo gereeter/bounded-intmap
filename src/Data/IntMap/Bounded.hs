@@ -25,9 +25,9 @@ module Data.IntMap.Bounded (
     
     -- ** Delete\/Update
     , delete
-{-    , adjust
+    , adjust
     , adjustWithKey
-    , update
+{-    , update
     , updateWithKey
     
     -- * Combine
@@ -130,14 +130,14 @@ insertWithKey f k = insertWith (f k) k
 
 delete :: Key -> IntMap a -> IntMap a
 delete k (IntMap m) = IntMap (W.delete (fromIntegral k) m)
-{-
+
 adjust :: (a -> a) -> Key -> IntMap a -> IntMap a
 adjust f k (IntMap m) = IntMap (W.adjust f (fromIntegral k) m)
 
 adjustWithKey :: (Key -> a -> a) -> Key -> IntMap a -> IntMap a
 adjustWithKey f k (IntMap m) = IntMap (W.adjustWithKey f' (fromIntegral k) m) where
     f' = f . fromIntegral
-
+{-
 update :: (a -> Maybe a) -> Key -> IntMap a -> IntMap a
 update f k (IntMap m) = IntMap (W.update f (fromIntegral k) m)
 
