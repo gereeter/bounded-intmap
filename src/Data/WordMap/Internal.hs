@@ -111,17 +111,23 @@ member k = k `seq` start
     
     goL !xorCache min Tip = False
     goL !xorCache min (Bin max _ l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goL xorCache min l
+                    else goR xorCacheMax max r
         | k > max = False
-        | k == max = True
-        | xorCache < xor k max = goL xorCache min l
-        | otherwise = goR (xor k max) max r
+        | otherwise = True
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max Tip = False
     goR !xorCache max (Bin min _ l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goR xorCache max r
+                    else goL xorCacheMin min l
         | k < min = False
-        | k == min = True
-        | xorCache < xor min k = goR xorCache max r
-        | otherwise = goL (xor min k) min l
+        | otherwise = True
+      where
+        xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Is the key not a member of the map?
 notMember :: Key -> WordMap a -> Bool
@@ -135,17 +141,23 @@ notMember k = k `seq` start
     
     goL !xorCache min Tip = True
     goL !xorCache min (Bin max _ l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goL xorCache min l
+                    else goR xorCacheMax max r
         | k > max = True
-        | k == max = False
-        | xorCache < xor k max = goL xorCache min l
-        | otherwise = goR (xor k max) max r
+        | otherwise = False
+      where
+        xorCacheMax = xor k max
     
     goR !xorCache max Tip = True
     goR !xorCache max (Bin min _ l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goR xorCache max r
+                    else goL xorCacheMin min l
         | k < min = True
-        | k == min = False
-        | xorCache < xor min k = goR xorCache max r
-        | otherwise = goL (xor min k) min l
+        | otherwise = False
+      where
+        xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Lookup the value at a key in the map.
 lookup :: Key -> WordMap a -> Maybe a
@@ -159,19 +171,21 @@ lookup k = k `seq` start
     
     goL !xorCache min Tip = Nothing
     goL !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goL xorCache min l
+                    else goR xorCacheMax max r
         | k > max = Nothing
-        | k == max = Just maxV
-        | xorCache < xorCacheMax = goL xorCache min l
-        | otherwise = goR xorCacheMax max r
+        | otherwise = Just maxV
       where
         xorCacheMax = xor k max
     
     goR !xorCache max Tip = Nothing
     goR !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goR xorCache max r
+                    else goL xorCacheMin min l
         | k < min = Nothing
-        | k == min = Just minV
-        | xorCache < xorCacheMin = goR xorCache max r
-        | otherwise = goL xorCacheMin min l
+        | otherwise = Just minV
       where
         xorCacheMin = xor min k
 
@@ -189,19 +203,21 @@ findWithDefault def k = k `seq` start
     
     goL !xorCache min Tip = def
     goL !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goL xorCache min l
+                    else goR xorCacheMax max r
         | k > max = def
-        | k == max = maxV
-        | xorCache < xorCacheMax = goL xorCache min l
-        | otherwise = goR xorCacheMax max r
+        | otherwise = maxV
       where
         xorCacheMax = xor k max
     
     goR !xorCache max Tip = def
     goR !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goR xorCache max r
+                    else goL xorCacheMin min l
         | k < min = def
-        | k == min = minV
-        | xorCache < xorCacheMin = goR xorCache max r
-        | otherwise = goL xorCacheMin min l
+        | otherwise = minV
       where
         xorCacheMin = xor min k
 {-
@@ -386,19 +402,21 @@ insert !k v (NonEmpty min minV node)
     
     goL !xorCache min Tip = Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goL xorCache min l) r
+                    else Bin max maxV l (goR xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax then Bin k v (Bin max maxV l r) Tip else Bin k v l (endR xorCacheMax max maxV r)
-        | k == max = Bin max v l r
-        | xorCache < xorCacheMax = Bin max maxV (goL xorCache min l) r
-        | otherwise = Bin max maxV l (goR xorCacheMax max r)
+        | otherwise = Bin max v l r
       where
         xorCacheMax = xor k max
 
     goR !xorCache max Tip = Bin k v Tip Tip
     goR !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goR xorCache max r)
+                    else Bin min minV (goL xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin then Bin k v Tip (Bin min minV l r) else Bin k v (endL xorCacheMin min minV l) r
-        | k == min = Bin min v l r
-        | xorCache < xorCacheMin = Bin min minV l (goR xorCache max r)
-        | otherwise = Bin min minV (goL xorCacheMin min l) r
+        | otherwise = Bin min v l r
       where
         xorCacheMin = xor min k
     
@@ -491,24 +509,26 @@ delete k = k `seq` start
     
     goL !xorCache min Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goL xorCache min l) r
+                    else Bin max maxV l (goR xorCacheMax max r)
         | k > max = n
-        | k == max = case r of
+        | otherwise = case r of
             Tip -> l
             Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
                                     in  Bin max' maxV' l r'
-        | xorCache < xorCacheMax = Bin max maxV (goL xorCache min l) r
-        | otherwise = Bin max maxV l (goR xorCacheMax max r)
       where xorCacheMax = xor k max
     
     goR !xorCache max Tip = Tip
     goR !xorCache max n@(Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goR xorCache max r)
+                    else Bin min minV (goL xorCacheMin min l) r
         | k < min = n
-        | k == min = case l of
+        | otherwise = case l of
             Tip -> r
             Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
                                     in  Bin min' minV' l' r
-        | xorCache < xorCacheMin = Bin min minV l (goR xorCache max r)
-        | otherwise = Bin min minV (goL xorCacheMin min l) r
       where xorCacheMin = xor min k
     
     goDeleteMin max maxV l r = case l of
