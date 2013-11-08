@@ -29,6 +29,7 @@ module Data.WordSet (
     
     -- * Combine
     , union
+    , unions
     , difference
     , intersection
     
