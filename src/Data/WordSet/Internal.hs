@@ -13,7 +13,7 @@ import qualified Data.List as List
 import Data.Word (Word)
 import Data.Bits (xor)
 
-import Prelude hiding (foldr, foldl, lookup, null, map)
+import Prelude hiding (foldr, foldl, lookup, null, map, filter)
 
 type Key = Word
 
@@ -24,6 +24,10 @@ instance Show WordSet where
     show m = "fromList " ++ show (toList m)
 
 instance NFData WordSet
+
+-- | /O(n+m)/. See 'difference'.
+(\\) :: WordSet -> WordSet -> WordSet
+(\\) = difference
 
 -- | /O(1)/. Is the map empty?
 null :: WordSet -> Bool
@@ -129,7 +133,7 @@ lookupLT k = k `seq` start
 -- > lookupLE 2 (fromList [3, 5]) == Nothing
 -- > lookupLE 4 (fromList [3, 5]) == Just 3
 -- > lookupLE 5 (fromList [3, 5]) == Just 5
-lookupLE :: Key -> WordMap a -> Maybe (Key, a)
+lookupLE :: Key -> WordSet -> Maybe Key
 lookupLE k = k `seq` start
   where
     start Empty = Nothing
@@ -158,7 +162,7 @@ lookupLE k = k `seq` start
 --
 -- > lookupGT 4 (fromList [3, 5]) == Just 5
 -- > lookupGT 5 (fromList [3, 5]) == Nothing
-lookupGT :: Key -> WordMap a -> Maybe (Key, a)
+lookupGT :: Key -> WordSet -> Maybe Key
 lookupGT k = k `seq` start
   where
     start Empty = Nothing
@@ -192,7 +196,7 @@ lookupGT k = k `seq` start
 -- > lookupGE 3 (fromList [3, 5]) == Just 3
 -- > lookupGE 4 (fromList [3, 5]) == Just 5
 -- > lookupGE 6 (fromList [3, 5]) == Nothing
-lookupGE :: Key -> WordMap a -> Maybe (Key, a)
+lookupGE :: Key -> WordSet -> Maybe Key
 lookupGE k = k `seq` start
   where
     start Empty = Nothing
@@ -336,6 +340,23 @@ delete k = k `seq` start
 -- Key, leading to lots of inefficiency (3x slower than stock Data.WordMap)
 data DeleteResult = DR {-# UNPACK #-} !Key !Node
 
+-- TODO: Optimize
+-- | /O(n+m)/. The union of two sets.
+union :: WordSet -> WordSet -> WordSet
+union l r = foldr' insert r l
+
+-- | The union of a list of sets.
+unions :: [WordSet] -> WordSet
+unions = List.foldl' union empty
+
+-- | /O(n+m)/. Difference between two sets.
+difference :: WordSet -> WordSet -> WordSet
+difference = foldr' delete
+
+-- | /O(n+m)/. The intersection of two sets.
+intersection :: WordSet -> WordSet -> WordSet
+intersection l = filter (`member` l)
+
 map :: (Key -> Key) -> WordSet -> WordSet
 map f = fromList . List.map f . toList
 
@@ -443,7 +464,7 @@ filter p = fromDistinctAscList . List.filter p . toAscList
 -- TODO: Optimize
 -- | /O(n)/. partition the set according to some predicate.
 partition :: (Key -> Bool) -> WordSet -> (WordSet, WordSet)
-partition p s = let (t, f) = List.partition (toAscList s)
+partition p s = let (t, f) = List.partition p (toAscList s)
                 in  (fromDistinctAscList t, fromDistinctAscList f)
 
 -- | /O(1)/. The minimal element of the set.
