@@ -459,91 +459,27 @@ toAscList = foldr (:) []
 -- | /O(n)/. Convert the set to a descending list of elements.
 toDescList :: WordSet -> [Key]
 toDescList = foldl (flip (:)) []
-{-
--- | /O(n)/. Filter all values that satisfy some predicate.
---
--- > filter (> "a") (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
--- > filter (> "x") (fromList [(5,"a"), (3,"b")]) == empty
--- > filter (< "a") (fromList [(5,"a"), (3,"b")]) == empty
-filter :: (a -> Bool) -> WordMap a -> WordMap a
-filter p = filterWithKey (const p)
 
--- | /O(n)/. Filter all keys\/values that satisfy some predicate.
---
--- > filterWithKey (\k _ -> k > 4) (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
-filterWithKey :: (Key -> a -> Bool) -> WordMap a -> WordMap a
-filterWithKey p = start
-  where
-    start Empty = Empty
-    start (NonEmpty min root) = goL min root
-    
-    goL min (Tip x)
-        | p min x = NonEmpty min (Tip x)
-        | otherwise = Empty
-    goL min (Bin max l r) = binL (goL min l) (goR max r)
-    
-    goR max (Tip x)
-        | p max x = NonEmpty max (Tip x)
-        | otherwise = Empty
-    goR max (Bin min l r) = binR (goL min l) (goR max r)
+-- | /O(n)/. Build a set from an ascending list of elements.
+-- /The precondition (input list is ascending) is not checked./
+fromAscList :: [Key] -> WordSet
+fromAscList = fromList
 
--- | /O(n)/. Partition the map according to some predicate. The first
--- map contains all elements that satisfy the predicate, the second all
--- elements that fail the predicate. See also 'split'.
---
--- > partition (> "a") (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", singleton 5 "a")
--- > partition (< "x") (fromList [(5,"a"), (3,"b")]) == (fromList [(3, "b"), (5, "a")], empty)
--- > partition (> "x") (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3, "b"), (5, "a")])
-partition :: (a -> Bool) -> WordMap a -> (WordMap a, WordMap a)
-partition p = partitionWithKey (const p)
+-- | /O(n)/. Build a set from an ascending list of distinct elements.
+-- /The precondition (input list is strictly ascending) is not checked./
+fromDistinctAscList :: [Key] -> WordSet
+fromDistinctAscList = fromList
 
--- | /O(n)/. Partition the map according to some predicate. The first
--- map contains all elements that satisfy the predicate, the second all
--- elements that fail the predicate. See also 'split'.
---
--- > partitionWithKey (\ k _ -> k > 3) (fromList [(5,"a"), (3,"b")]) == (singleton 5 "a", singleton 3 "b")
--- > partitionWithKey (\ k _ -> k < 7) (fromList [(5,"a"), (3,"b")]) == (fromList [(3, "b"), (5, "a")], empty)
--- > partitionWithKey (\ k _ -> k > 7) (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3, "b"), (5, "a")])
-partitionWithKey :: (Key -> a -> Bool) -> WordMap a -> (WordMap a, WordMap a)
-partitionWithKey p = start
-  where
-    start Empty = Empty
-    start (NonEmpty min root) = goL min root
-    
-    goL min (Tip x)
-        | p min x = (NonEmpty min (Tip x), Empty)
-        | otherwise = (Empty, NonEmpty min (Tip x))
-    goL min (Bin max l r) = let (lt, lf) = goL min l
-                                (rt, rf) = goR max r
-                            in  (binL lt rt, binR lf rf)
-    
-    goR max (Tip x)
-        | p max x = (NonEmpty max (Tip x), Empty)
-        | otherwise = (Empty, NonEmpty max (Tip x))
-    goR max (Bin min l r) = let (lt, lf) = goL min l
-                                (rt, rf) = goR max r
-                            in  (binL lt rt, binR lf rf)
+-- TODO: Optimize
+-- | /O(n)/. Filter all elements that satisfy some predicate.
+filter :: (Key -> Bool) -> WordSet -> WordSet
+filter p = fromDistinctAscList . List.filter p . toAscList
 
-splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
-splitLookup k = k `seq` start
-  where
-    start Empty = (Empty, Nothing, Empty)
-    start (NonEmpty min root)
-        | k < min = (Empty, Nothing, NonEmpty min root)
-        | otherwise = goL (xor min k) min root
-    
-    goL !xorCache min (Tip x)
-        | k == min = (Empty, Just x, Empty)
-        | otherwise = (NonEmpty min (Tip x), Nothing, Empty)
-    goL !xorCache min n@(Bin max l r)
-        | k > max = (NonEmpty min n, Nothing, Empty)
-        | xorCache < xorCacheMax = let (ll, lv, lr) = goL xorCache min l
-                                   in  (ll, lv, Bin max lr r)
-        | otherwise              = let (rl, rv, rr) = goR xorCacheMax max r
-                                   in  (Bin max l rl, rv, rr)
-      where
-        xorCacheMax = xor k max
--}
+-- TODO: Optimize
+-- | /O(n)/. partition the set according to some predicate.
+partition :: (Key -> Bool) -> WordSet -> (WordSet, WordSet)
+partition p s = let (t, f) = List.partition (toAscList s)
+                in  (fromDistinctAscList t, fromDistinctAscList f)
 
 -- | /O(1)/. The minimal element of the set.
 findMin :: WordSet -> Word
@@ -555,6 +491,31 @@ findMax :: WordSet -> Word
 findMax Empty = error "findMax: empty set has no maximal element"
 findMax (NonEmpty min Tip) = min
 findMax (NonEmpty _ (Bin max _ _)) = max
+
+deleteMin :: WordSet -> WordSet
+deleteMin Empty = Empty
+deleteMin (NonEmpty _ Tip) = Empty
+deleteMin (NonEmpty _ (Bin max l r)) = case go max l r of
+    DR min root -> NonEmpty min root
+  where
+    go max Tip Tip = DR max Tip
+    go max Tip (Bin min l r) = DR min (Bin max l r)
+    go max (Bin maxI lI rI) r = case go maxI lI rI of
+        DR min l' -> DR min (Bin max l' r)
+
+deleteMax :: WordSet -> WordSet
+deleteMax Empty = Empty
+deleteMax (NonEmpty _ Tip) = Empty
+deleteMax (NonEmpty min (Bin _ l r)) = NonEmpty min (start l r)
+  where
+    start l Tip = l
+    start l (Bin minI lI rI) = case go minI lI rI of
+        DR max r -> Bin max l r
+    
+    go min Tip Tip = DR min Tip
+    go min (Bin max l r) Tip = DR max (Bin min l r)
+    go min l (Bin minI lI rI) = case go minI lI rI of
+        DR max r -> DR max (Bin min l r)
 
 ----------------------------
 
