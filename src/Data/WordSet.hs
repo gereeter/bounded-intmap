@@ -16,10 +16,10 @@ module Data.WordSet (
     , size
     , member
     , notMember
-    , lookupLT
+{-    , lookupLT
     , lookupGT
     , lookupLE
-    , lookupGE
+    , lookupGE-}
     
     -- * Construction
     , empty
