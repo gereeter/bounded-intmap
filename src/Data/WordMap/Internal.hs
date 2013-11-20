@@ -212,7 +212,7 @@ findWithDefault def k = k `seq` start
         | k < min = def
         | otherwise = minV
       where  xorCacheMin = xor min k
-{-
+
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
 --
@@ -222,35 +222,28 @@ lookupLT :: Key -> WordMap a -> Maybe (Key, a)
 lookupLT k = k `seq` start
   where
     start Empty = Nothing
-    start (NonEmpty min node)
+    start (NonEmpty min minV node)
         | min >= k = Nothing
-        | otherwise = goL (xor min k) min node
+        | otherwise = Just (goL (xor min k) min minV node)
     
-    goL !xorCache min (Tip x)
-        | min < k = Just (min, x)
-        | otherwise = Nothing
-    goL !xorCache min (Bin max l r)
-        | max < k = Just (max, getMaxV r)
-        | xorCache < xorCacheMax = goL xorCache min l
-        | otherwise = goR xorCacheMax max r min l
+    goL !xorCache min minV Tip = (min, minV)
+    goL !xorCache min minV (Bin max maxV l r)
+        | max < k = (max, maxV)
+        | xorCache < xorCacheMax = goL xorCache min minV l
+        | otherwise = goR xorCacheMax r min minV l
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x) fMin fallback
-        | max < k = Just (max, x)
-        | otherwise = Just (getMax fMin fallback)
-    goR !xorCache max (Bin min l r) fMin fallback
-        | min >= k = Just (getMax fMin fallback)
-        | xorCache < xorCacheMin = goR xorCache max r min l
-        | otherwise = goL xorCacheMin min l
+    goR !xorCache Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !xorCache (Bin min minV l r) fMin fMinV fallback
+        | min >= k = getMax fMin fMinV fallback
+        | xorCache < xorCacheMin = goR xorCache r min minV l
+        | otherwise = goL xorCacheMin min minV l
       where
         xorCacheMin = xor min k
     
-    getMax min (Tip x) = (min, x)
-    getMax min (Bin max l r) = (max, getMaxV r)
-    
-    getMaxV (Tip x) = x
-    getMaxV (Bin b l r) = getMaxV r
+    getMax min minV Tip = (min, minV)
+    getMax min minV (Bin max maxV l r) = (max, maxV)
 
 -- | /O(log n)/. Find largest key smaller or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -262,36 +255,29 @@ lookupLE :: Key -> WordMap a -> Maybe (Key, a)
 lookupLE k = k `seq` start
   where
     start Empty = Nothing
-    start (NonEmpty min node)
+    start (NonEmpty min minV node)
         | min > k = Nothing
-        | otherwise = goL (xor min k) min node
+        | otherwise = Just (goL (xor min k) min minV node)
     
-    goL !xorCache min (Tip x)
-        | min <= k = Just (min, x)
-        | otherwise = Nothing
-    goL !xorCache min (Bin max l r)
-        | max <= k = Just (max, getMaxV r)
-        | xorCache < xorCacheMax = goL xorCache min l
-        | otherwise = goR xorCacheMax max r min l
+    goL !xorCache min minV Tip = (min, minV)
+    goL !xorCache min minV (Bin max maxV l r)
+        | max <= k = (max, maxV)
+        | xorCache < xorCacheMax = goL xorCache min minV l
+        | otherwise = goR xorCacheMax r min minV l
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max (Tip x) fMin fallback
-        | max <= k = Just (max, x)
-        | otherwise = Just (getMax fMin fallback)
-    goR !xorCache max (Bin min l r) fMin fallback
-        | min > k = Just (getMax fMin fallback)
-        | xorCache < xorCacheMin = goR xorCache max r min l
-        | otherwise = goL xorCacheMin min l
+    goR !xorCache Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !xorCache (Bin min minV l r) fMin fMinV fallback
+        | min > k = getMax fMin fMinV fallback
+        | xorCache < xorCacheMin = goR xorCache r min minV l
+        | otherwise = goL xorCacheMin min minV l
       where
         xorCacheMin = xor min k
     
-    getMax min (Tip x) = (min, x)
-    getMax min (Bin max l r) = (max, getMaxV r)
-    
-    getMaxV (Tip x) = x
-    getMaxV (Bin b l r) = getMaxV r
-
+    getMax min minV Tip = (min, minV)
+    getMax min minV (Bin max maxV l r) = (max, maxV)
+{-
 -- | /O(log n)/. Find smallest key greater than the given one and return the
 -- corresponding (key, value) pair.
 --
