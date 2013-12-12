@@ -43,11 +43,11 @@ instance Data.Foldable.Foldable WordMap where
         
         goR Tip = mempty
         goR (Bin _ v l r) = f v `mappend` goL l `mappend` goR r
-    {-
+    
     foldr = foldr
     foldr' = foldr'
     foldl = foldl
-    foldl' = foldl'-}
+    foldl' = foldl'
 
 instance Traversable WordMap where
     traverse f Empty = pure Empty
@@ -862,7 +862,7 @@ mapAccumRWithKey f a (NonEmpty min minV root) =
             (a'',  l') = goL min l a'
             (a''', minV') = f a'' min minV
         in  (a''', Bin min minV' l' r')
-{-
+
 -- | /O(n)/. Fold the values in the map using the given right-associative
 -- binary operator, such that @'foldr' f z == 'Prelude.foldr' f z . 'elems'@.
 --
@@ -876,10 +876,13 @@ foldr :: (a -> b -> b) -> b -> WordMap a -> b
 foldr f z = start
   where
     start Empty = z
-    start (NonEmpty _ root) = go root z
+    start (NonEmpty _ minV root) = f minV (goL root z)
     
-    go (Tip x) acc = f x acc
-    go (Bin _ l r) acc = go l (go r acc)
+    goL Tip acc = acc
+    goL (Bin _ maxV l r) acc = goL l (goR r (f maxV acc))
+    
+    goR Tip acc = acc
+    goR (Bin _ minV l r) acc = f minV (goL l (goR r acc))
 
 -- | /O(n)/. Fold the values in the map using the given left-associative
 -- binary operator, such that @'foldl' f z == 'Prelude.foldl' f z . 'elems'@.
@@ -894,10 +897,13 @@ foldl :: (a -> b -> a) -> a -> WordMap b -> a
 foldl f z = start
   where
     start Empty = z
-    start (NonEmpty _ root) = go root z
+    start (NonEmpty _ minV root) = goL (f z minV) root
     
-    go (Tip x) acc = f acc x
-    go (Bin _ l r) acc = go r (go l acc)
+    goL acc Tip = acc
+    goL acc (Bin _ maxV l r) = f (goR (goL acc l) r) maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin _ minV l r) = goR (goL (f acc minV) l) r
 
 -- | /O(n)/. Fold the keys and values in the map using the given right-associative
 -- binary operator, such that
@@ -913,13 +919,13 @@ foldrWithKey :: (Key -> a -> b -> b) -> b -> WordMap a -> b
 foldrWithKey f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL min root z
+    start (NonEmpty min minV root) = f min minV (goL root z)
     
-    goL min (Tip x) acc = f min x acc
-    goL min (Bin max l r) acc = goL min l (goR max r acc)
+    goL Tip acc = acc
+    goL (Bin max maxV l r) acc = goL l (goR r (f max maxV acc))
     
-    goR max (Tip x) acc = f max x acc
-    goR max (Bin min l r) acc = goL min l (goR max r acc)
+    goR Tip acc = acc
+    goR (Bin min minV l r) acc = f min minV (goL l (goR r acc))
 
 -- | /O(n)/. Fold the keys and values in the map using the given left-associative
 -- binary operator, such that
@@ -935,13 +941,13 @@ foldlWithKey :: (a -> Key -> b -> a) -> a -> WordMap b -> a
 foldlWithKey f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL min root z
+    start (NonEmpty min minV root) = goL (f z min minV) root
     
-    goL min (Tip x) acc = f acc min x
-    goL min (Bin max l r) acc = goR max r (goL min l acc)
+    goL acc Tip = acc
+    goL acc (Bin max maxV l r) = f (goR (goL acc l) r) max maxV
     
-    goR max (Tip x) acc = f acc max x
-    goR max (Bin min l r) acc = goR max r (goL min l acc)
+    goR acc Tip = acc
+    goR acc (Bin min minV l r) = goR (goL (f acc min minV) l) r
 
 -- | /O(n)/. Fold the keys and values in the map using the given monoid, such that
 --
@@ -952,13 +958,13 @@ foldMapWithKey :: Monoid m => (Key -> a -> m) -> WordMap a -> m
 foldMapWithKey f = start
   where
     start Empty = mempty
-    start (NonEmpty min root) = goL min root
+    start (NonEmpty min minV root) = f min minV `mappend` goL root
     
-    goL min (Tip x) = f min x
-    goL min (Bin max l r) = goL min l `mappend` goR max r
+    goL Tip = mempty
+    goL (Bin max maxV l r) = goL l `mappend` goR r `mappend` f max maxV
     
-    goR max (Tip x) = f max x
-    goR max (Bin min l r) = goL min l `mappend` goR max r
+    goR Tip = mempty
+    goR (Bin min minV l r) = f min minV `mappend` goL l `mappend` goR r
 
 -- | /O(n)/. A strict version of 'foldr'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -967,10 +973,13 @@ foldr' :: (a -> b -> b) -> b -> WordMap a -> b
 foldr' f z = start
   where
     start Empty = z
-    start (NonEmpty _ root) = go root z
+    start (NonEmpty _ minV root) = f minV $! goL root $! z
     
-    go (Tip x) !acc = f x acc
-    go (Bin _ l r) !acc = go l (go r acc)
+    goL Tip acc = acc
+    goL (Bin _ maxV l r) acc = goL l $! goR r $! f maxV $! acc
+    
+    goR Tip acc = acc
+    goR (Bin _ minV l r) acc = f minV $! goL l $! goR r $! acc
 
 -- | /O(n)/. A strict version of 'foldl'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -979,10 +988,15 @@ foldl' :: (a -> b -> a) -> a -> WordMap b -> a
 foldl' f z = start
   where
     start Empty = z
-    start (NonEmpty _ root) = go root z
+    start (NonEmpty _ minV root) = s goL (s f z minV) root
     
-    go (Tip x) !acc = f acc x
-    go (Bin _ l r) !acc = go r (go l acc)
+    goL acc Tip = acc
+    goL acc (Bin _ maxV l r) = s f (s goR (s goL acc l) r) maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin _ minV l r) = s goR (s goL (s f acc minV) l) r
+    
+    s = ($!)
 
 -- | /O(n)/. A strict version of 'foldrWithKey'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -991,13 +1005,13 @@ foldrWithKey' :: (Key -> a -> b -> b) -> b -> WordMap a -> b
 foldrWithKey' f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL min root z
+    start (NonEmpty min minV root) = f min minV $! goL root $! z
     
-    goL min (Tip x) !acc = f min x acc
-    goL min (Bin max l r) !acc = goL min l (goR max r acc)
+    goL Tip acc = acc
+    goL (Bin max maxV l r) acc = goL l $! goR r $! f max maxV $! acc
     
-    goR max (Tip x) !acc = f max x acc
-    goR max (Bin min l r) !acc = goL min l (goR max r acc)
+    goR Tip acc = acc
+    goR (Bin min minV l r) acc = f min minV $! goL l $! goR r $! acc
 
 -- | /O(n)/. A strict version of 'foldlWithKey'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -1006,14 +1020,16 @@ foldlWithKey' :: (a -> Key -> b -> a) -> a -> WordMap b -> a
 foldlWithKey' f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL min root z
+    start (NonEmpty min minV root) = s goL (s f z min minV) root
     
-    goL min (Tip x) !acc = f acc min x
-    goL min (Bin max l r) !acc = goR max r (goL min l acc)
+    goL acc Tip = acc
+    goL acc (Bin max maxV l r) = s f (s goR (s goL acc l) r) max maxV
     
-    goR max (Tip x) !acc = f acc max x
-    goR max (Bin min l r) !acc = goR max r (goL min l acc)
--}
+    goR acc Tip = acc
+    goR acc (Bin min minV l r) = s goR (s goL (s f acc min minV) l) r
+    
+    s = ($!)
+
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
 fromList = Data.Foldable.foldr (uncurry insert) empty
