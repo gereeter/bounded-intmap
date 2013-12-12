@@ -163,22 +163,22 @@ lookup k = k `seq` start
     start (NonEmpty min minV node)
         | k < min = Nothing
         | k == min = Just minV
-        | otherwise = goL (xor min k) min node
+        | otherwise = goL (xor min k) node
     
-    goL !xorCache min Tip = Nothing
-    goL !xorCache min (Bin max maxV l r)
+    goL !xorCache Tip = Nothing
+    goL !xorCache (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then goL xorCache min l
-                    else goR xorCacheMax max r
+                    then goL xorCache l
+                    else goR xorCacheMax r
         | k > max = Nothing
         | otherwise = Just maxV
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = Nothing
-    goR !xorCache max (Bin min minV l r)
+    goR !xorCache Tip = Nothing
+    goR !xorCache (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then goR xorCache max r
-                    else goL xorCacheMin min l
+                    then goR xorCache r
+                    else goL xorCacheMin l
         | k < min = Nothing
         | otherwise = Just minV
       where xorCacheMin = xor min k
@@ -193,22 +193,22 @@ findWithDefault def k = k `seq` start
     start (NonEmpty min minV node)
         | k < min = def
         | k == min = minV
-        | otherwise = goL (xor min k) min node
+        | otherwise = goL (xor min k) node
     
-    goL !xorCache min Tip = def
-    goL !xorCache min (Bin max maxV l r)
+    goL !xorCache Tip = def
+    goL !xorCache (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then goL xorCache min l
-                    else goR xorCacheMax max r
+                    then goL xorCache l
+                    else goR xorCacheMax r
         | k > max = def
         | otherwise = maxV
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = def
-    goR !xorCache max (Bin min minV l r)
+    goR !xorCache Tip = def
+    goR !xorCache (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then goR xorCache max r
-                    else goL xorCacheMin min l
+                    then goR xorCache r
+                    else goL xorCacheMin l
         | k < min = def
         | otherwise = minV
       where  xorCacheMin = xor min k
@@ -401,19 +401,19 @@ insert k v = k `seq` start
         | otherwise = Bin min v l r
       where xorCacheMin = xor min k
     
-    endL !xorCache min minV = finishL
+    endL !xorCache min minV = go
       where
-        finishL Tip = Bin min minV Tip Tip
-        finishL (Bin max maxV l r)
+        go Tip = Bin min minV Tip Tip
+        go (Bin max maxV l r)
             | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (finishL l) r
+            | otherwise = Bin max maxV (go l) r
 
-    endR !xorCache max maxV = finishR
+    endR !xorCache max maxV = go
       where
-        finishR Tip = Bin max maxV Tip Tip
-        finishR (Bin min minV l r)
+        go Tip = Bin max maxV Tip Tip
+        go (Bin min minV l r)
             | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (finishR r)
+            | otherwise = Bin min minV l (go r)
 
 -- | /O(min(n,W))/. Insert with a combining function.
 -- @'insertWith' f key value mp@
@@ -685,91 +685,7 @@ unionWith f = unionWithKey (const f)
 -- > let f key left_value right_value = (show key) ++ ":" ++ left_value ++ "|" ++ right_value
 -- > unionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "5:a|A"), (7, "C")]
 unionWithKey :: (Key -> a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
-unionWithKey _ Empty r = r
-unionWithKey _ l Empty = l
-unionWithKey combine (NonEmpty min1 node1) (NonEmpty min2 node2) = NonEmpty (Prelude.min min1 min2) (goL min1 node1 min2 node2)
-  where
-    goL min1 (Tip x1) min2 (Tip x2) = case compare min1 min2 of
-        LT -> Bin min2 (Tip x1) (Tip x2)
-        EQ -> Tip x1
-        GT -> Bin min1 (Tip x2) (Tip x1)
-    goL min1 (Tip x1) min2 (Bin max2 l2 r2) = insertLL min1 x1 min2 (Bin max2 l2 r2)
-    goL min1 (Bin max1 l1 r1) min2 (Tip x2) = insertLR min2 x2 min1 (Bin max1 l1 r1)
-    goL min1 (Bin max1 l1 r1) min2 (Bin max2 l2 r2)
-        | max1 < min2 && ltMSB (xor min1 max1 .|. xor min2 max2) (xor max1 min2) = Bin max2 (Bin max1 l1 r1) (Bin min2 l2 r2)
-        | max2 < min1 && ltMSB (xor min1 max1 .|. xor min2 max2) (xor max2 min1) = Bin max1 (Bin max2 l2 r2) (Bin min1 l1 r1)
-        | otherwise = case compareMSB (xor min1 max1) (xor min2 max2) of
-            LT | ltMSB (xor min1 max2) (xor min2 max2) -> Bin (Prelude.max max1 max2) l2 (goR max1 (Bin min1 l1 r1) max2 r2)
-               | otherwise -> Bin (Prelude.max max1 max2) (goL min1 (Bin max1 l1 r1) min2 l2) r2
-            EQ -> Bin (Prelude.max max1 max2) (goL min1 l1 min2 l2) (goR max1 r1 max2 r2)
-            GT | ltMSB (xor min2 max1) (xor min1 max1) -> Bin (Prelude.max max1 max2) l1 (goR max1 r1 max2 (Bin min2 l2 r2))
-               | otherwise -> Bin (Prelude.max max1 max2) (goL min1 l1 min2 (Bin max1 l2 r2)) r1
-    
-    goR max1 (Tip x1) max2 (Tip x2) = case compare max1 max2 of
-        LT -> Bin max1 (Tip x1) (Tip x2)
-        EQ -> Tip x1
-        GT -> Bin max2 (Tip x2) (Tip x1)
-    goR max1 (Tip x1) max2 (Bin min2 l2 r2) = insertRL max1 x1 max2 (Bin min2 l2 r2)
-    goR max1 (Bin min1 l1 r1) max2 (Tip x2) = insertRR max2 x2 max1 (Bin min1 l1 r1)
-    goR max1 (Bin min1 l1 r1) max2 (Bin min2 l2 r2)
-        | max1 < min2 && ltMSB (xor min1 max1 .|. xor min2 max2) (xor max1 min2) = Bin min1 (Bin max1 l1 r1) (Bin min2 l2 r2)
-        | max2 < min1 && ltMSB (xor min1 max1 .|. xor min2 max2) (xor max2 min1) = Bin min2 (Bin max2 l2 r2) (Bin min1 l1 r1)
-        | otherwise = case compareMSB (xor min1 max1) (xor min2 max2) of
-            LT | ltMSB (xor min1 max2) (xor min2 max2) -> Bin (Prelude.min min1 min2) l2 (goR max1 (Bin min1 l1 r1) max2 r2)
-               | otherwise -> Bin (Prelude.min min1 min2) (goL min1 (Bin max1 l1 r1) min2 l2) r2
-            EQ -> Bin (Prelude.min min1 min2) (goL min1 l1 min2 l2) (goR max1 r1 max2 r2)
-            GT | ltMSB (xor min2 max1) (xor min1 max1) -> Bin (Prelude.min min1 min2) l1 (goR max1 r1 max2 (Bin min2 l2 r2))
-               | otherwise -> Bin (Prelude.min min1 min2) (goL min1 l1 min2 (Bin max1 l2 r2)) r1
-    
-    insertLL k v min = goInsertLL k v (xor k min) min
-    insertRL k v max = goInsertRL k v (xor k max) max
-    insertLR k v min = goInsertLR k v (xor k min) min
-    insertRR k v max = goInsertRR k v (xor k max) max
-    
-    goInsertLL k v !xorCache min (Tip x)
-        | k == min = Tip (combine k v x)
-        | otherwise = Bin k (Tip x) (Tip v)
-    goInsertLL k v !xorCache min (Bin max l r)
-        | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR k v max r)
-        | ltMSB xorCache (xor min max) = Bin max (goInsertLL k v xorCache min l) r
-        | otherwise = Bin max l (insertRL k v max r)
-
-    goInsertRL k v !xorCache max (Tip x)
-        | k == max = Tip (combine k v x)
-        | otherwise = Bin k (Tip v) (Tip x)
-    goInsertRL k v !xorCache max (Bin min l r)
-        | k < min = if ltMSB (xor min max) xorCache then Bin k (Tip v) (Bin min l r) else Bin k (finishL k v min l) r
-        | ltMSB xorCache (xor min max) = Bin min l (goInsertRL k v xorCache max r)
-        | otherwise = Bin min (insertLL k v min l) r
-    
-    goInsertLR k v !xorCache min (Tip x)
-        | k == min = Tip (combine k x v)
-        | otherwise = Bin k (Tip x) (Tip v)
-    goInsertLR k v !xorCache min (Bin max l r)
-        | k > max = if ltMSB (xor min max) xorCache then Bin k (Bin max l r) (Tip v) else Bin k l (finishR k v max r)
-        | ltMSB xorCache (xor min max) = Bin max (goInsertLR k v xorCache min l) r
-        | otherwise = Bin max l (insertRR k v max r)
-
-    goInsertRR k v !xorCache max (Tip x)
-        | k == max = Tip (combine k x v)
-        | otherwise = Bin k (Tip v) (Tip x)
-    goInsertRR k v !xorCache max (Bin min l r)
-        | k < min = if ltMSB (xor min max) xorCache then Bin k (Tip v) (Bin min l r) else Bin k (finishL k v min l) r
-        | ltMSB xorCache (xor min max) = Bin min l (goInsertRR k v xorCache max r)
-        | otherwise = Bin min (insertLR k v min l) r
-    
-    finishL k v min = endL k v (xor k min) min
-    finishR k v max = endR k v (xor k max) max
-    
-    endL k v !xorCache min (Tip x) = Bin min (Tip v) (Tip x)
-    endL k v !xorCache min (Bin max l r)
-        | ltMSB (xor min max) xorCache = Bin max (Tip v) (Bin min l r)
-        | otherwise = Bin max (endL k v xorCache min l) r
-
-    endR k v !xorCache max (Tip x) = Bin max (Tip x) (Tip v)
-    endR k v !xorCache max (Bin min l r)
-        | ltMSB (xor min max) xorCache = Bin min (Bin max l r) (Tip v)
-        | otherwise = Bin min l (endR k v xorCache max r)
+unionWithKey combine m1 m2 = foldrWithKey (insertWithKey combine) m2 m1
 
 -- | /O(n+m)/. The (left-biased) intersection of two maps (based on keys).
 --
