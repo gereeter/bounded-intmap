@@ -16,7 +16,7 @@ import Data.Traversable
 import Data.Word (Word)
 import Data.Bits (xor, (.|.))
 
-import Prelude hiding (foldr, foldl, lookup, null, map)
+import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
 type Key = Word
 
