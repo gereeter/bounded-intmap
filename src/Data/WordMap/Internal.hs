@@ -58,11 +58,11 @@ instance Traversable WordMap where
         
         goR Tip = pure Tip
         goR (Bin min minV l r) = Bin min <$> f minV <*> goL l <*> goR r
-{-
+
 instance Monoid (WordMap a) where
     mempty = empty
     mappend = union
--}
+
 instance NFData a => NFData (WordMap a) where
     rnf Empty = ()
     rnf (NonEmpty _ v n) = rnf v `seq` rnf n
