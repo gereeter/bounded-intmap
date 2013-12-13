@@ -1131,7 +1131,52 @@ partitionWithKey p = start
     goR max (Bin min l r) = let (lt, lf) = goL min l
                                 (rt, rf) = goR max r
                             in  (binL lt rt, binR lf rf)
+-}
 
+mapMaybe :: (a -> Maybe b) -> WordMap a -> WordMap b
+mapMaybe f = mapMaybeWithKey (const f)
+
+mapMaybeWithKey :: (Key -> a -> Maybe b) -> WordMap a -> WordMap b
+mapMaybeWithKey f = start
+  where
+    start Empty = Empty
+    start (NonEmpty min minV root) = case f min minV of
+        Just minV' -> NonEmpty min minV' (goL root)
+        Nothing -> goDeleteL root
+    
+    goL Tip = Tip
+    goL (Bin max maxV l r) = case f max maxV of
+        Just maxV' -> Bin max maxV' (goL l) (goR r)
+        Nothing -> case goDeleteR r of
+            Empty -> goL l
+            NonEmpty max' maxV' r' -> Bin max' maxV' (goL l) r'
+    
+    goR Tip = Tip
+    goR (Bin min minV l r) = case f min minV of
+        Just minV' -> Bin min minV' (goL l) (goR r)
+        Nothing -> case goDeleteL l of
+            Empty -> goR r
+            NonEmpty min' minV' l' -> Bin min' minV' l' (goR r)
+    
+    goDeleteL Tip = Empty
+    goDeleteL (Bin max maxV l r) = case f max maxV of
+        Just maxV' -> case goDeleteL l of
+            Empty -> case goR r of
+                Tip -> NonEmpty max maxV' Tip
+                Bin minI minVI lI rI -> NonEmpty minI minVI (Bin max maxV' lI rI)
+            NonEmpty min minV l' -> NonEmpty min minV (Bin max maxV' l' (goR r))
+        Nothing -> binL (goDeleteL l) (goDeleteR r)
+    
+    goDeleteR Tip = Empty
+    goDeleteR (Bin min minV l r) = case f min minV of
+        Just minV' -> case goDeleteR r of
+            Empty -> case goL l of
+                Tip -> NonEmpty min minV' Tip
+                Bin maxI maxVI lI rI -> NonEmpty maxI maxVI (Bin min minV' lI rI)
+            NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV' (goL l) r')
+        Nothing -> binR (goDeleteL l) (goDeleteR r)
+
+{-
 splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
 splitLookup k = k `seq` start
   where
