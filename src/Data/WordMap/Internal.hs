@@ -1133,9 +1133,17 @@ partitionWithKey p = start
                             in  (binL lt rt, binR lf rf)
 -}
 
+-- | /O(n)/. Map values and collect the 'Just' results.
+--
+-- > let f x = if x == "a" then Just "new a" else Nothing
+-- > mapMaybe f (fromList [(5,"a"), (3,"b")]) == singleton 5 "new a"
 mapMaybe :: (a -> Maybe b) -> WordMap a -> WordMap b
 mapMaybe f = mapMaybeWithKey (const f)
 
+-- | /O(n)/. Map keys\/values and collect the 'Just' results.
+--
+-- > let f k _ = if k < 5 then Just ("key : " ++ (show k)) else Nothing
+-- > mapMaybeWithKey f (fromList [(5,"a"), (3,"b")]) == singleton 3 "key : 3"
 mapMaybeWithKey :: (Key -> a -> Maybe b) -> WordMap a -> WordMap b
 mapMaybeWithKey f = start
   where
