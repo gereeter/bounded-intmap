@@ -68,6 +68,9 @@ module Data.WordMap (
     , mapAccum
     , mapAccumWithKey
     , mapAccumRWithKey
+    , mapKeys
+    , mapKeysWith
+    , mapKeysMonotonic
     
     -- ** Folds
     , foldr
@@ -102,4 +105,4 @@ module Data.WordMap (
 
 import Data.WordMap.Internal
 
-import Prelude hiding (foldr, foldl, lookup, null, map)
+import Prelude hiding (foldr, foldl, lookup, null, map, filter)
