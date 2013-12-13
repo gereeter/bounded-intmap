@@ -14,7 +14,7 @@ import qualified Data.Foldable (Foldable(..))
 import Data.Traversable
 
 import Data.Word (Word)
-import Data.Bits (xor, (.|.))
+import Data.Bits (xor)
 
 import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
@@ -27,22 +27,24 @@ instance Show a => Show (WordMap a) where
     show m = "fromList " ++ show (toList m)
 
 instance Functor WordMap where
-    fmap f Empty = Empty
+    fmap _ Empty = Empty
     fmap f (NonEmpty min minV node) = NonEmpty min (f minV) (fmap f node)
 
 instance Functor Node where
-    fmap f Tip = Tip
+    fmap _ Tip = Tip
     fmap f (Bin k v l r) = Bin k (f v) (fmap f l) (fmap f r)
 
 instance Data.Foldable.Foldable WordMap where
-    foldMap f Empty = mempty
-    foldMap f (NonEmpty _ v node) = f v `mappend` goL node
+    foldMap f = start
       where
+        start Empty = mempty
+        start (NonEmpty _ minV root) = f minV `mappend` goL root
+        
         goL Tip = mempty
-        goL (Bin _ v l r) = goL l `mappend` goR r `mappend` f v
+        goL (Bin _ maxV l r) = goL l `mappend` goR r `mappend` f maxV
         
         goR Tip = mempty
-        goR (Bin _ v l r) = f v `mappend` goL l `mappend` goR r
+        goR (Bin _ minV l r) = f minV `mappend` goL l `mappend` goR r
     
     foldr = foldr
     foldr' = foldr'
@@ -50,9 +52,11 @@ instance Data.Foldable.Foldable WordMap where
     foldl' = foldl'
 
 instance Traversable WordMap where
-    traverse f Empty = pure Empty
-    traverse f (NonEmpty min minV node) = NonEmpty min <$> f minV <*> goL node
+    traverse f = start
       where
+        start Empty = pure Empty
+        start (NonEmpty min minV node) = NonEmpty min <$> f minV <*> goL node
+        
         goL Tip = pure Tip
         goL (Bin max maxV l r) = (\l' r' v' -> Bin max v' l' r') <$> goL l <*> goR r <*> f maxV
         
@@ -107,22 +111,22 @@ member k = k `seq` start
     start (NonEmpty min _ node)
         | k < min = False
         | k == min = True
-        | otherwise = goL (xor min k) min node
+        | otherwise = goL (xor min k) node
     
-    goL !xorCache min Tip = False
-    goL !xorCache min (Bin max _ l r)
+    goL !_ Tip = False
+    goL !xorCache (Bin max _ l r)
         | k < max = if xorCache < xorCacheMax
-                    then goL xorCache min l
-                    else goR xorCacheMax max r
+                    then goL xorCache l
+                    else goR xorCacheMax r
         | k > max = False
         | otherwise = True
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = False
-    goR !xorCache max (Bin min _ l r)
+    goR !_ Tip = False
+    goR !xorCache (Bin min _ l r)
         | k > min = if xorCache < xorCacheMin
-                    then goR xorCache max r
-                    else goL xorCacheMin min l
+                    then goR xorCache r
+                    else goL xorCacheMin l
         | k < min = False
         | otherwise = True
       where xorCacheMin = xor min k
@@ -135,22 +139,22 @@ notMember k = k `seq` start
     start (NonEmpty min _ node)
         | k < min = True
         | k == min = False
-        | otherwise = goL (xor min k) min node
+        | otherwise = goL (xor min k) node
     
-    goL !xorCache min Tip = True
-    goL !xorCache min (Bin max _ l r)
+    goL !_ Tip = True
+    goL !xorCache (Bin max _ l r)
         | k < max = if xorCache < xorCacheMax
-                    then goL xorCache min l
-                    else goR xorCacheMax max r
+                    then goL xorCache l
+                    else goR xorCacheMax r
         | k > max = True
         | otherwise = False
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = True
-    goR !xorCache max (Bin min _ l r)
+    goR !_ Tip = True
+    goR !xorCache (Bin min _ l r)
         | k > min = if xorCache < xorCacheMin
-                    then goR xorCache max r
-                    else goL xorCacheMin min l
+                    then goR xorCache r
+                    else goL xorCacheMin l
         | k < min = True
         | otherwise = False
       where xorCacheMin = xor min k
@@ -165,7 +169,7 @@ lookup k = k `seq` start
         | k == min = Just minV
         | otherwise = goL (xor min k) node
     
-    goL !xorCache Tip = Nothing
+    goL !_ Tip = Nothing
     goL !xorCache (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then goL xorCache l
@@ -174,7 +178,7 @@ lookup k = k `seq` start
         | otherwise = Just maxV
       where xorCacheMax = xor k max
     
-    goR !xorCache Tip = Nothing
+    goR !_ Tip = Nothing
     goR !xorCache (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then goR xorCache r
@@ -195,7 +199,7 @@ findWithDefault def k = k `seq` start
         | k == min = minV
         | otherwise = goL (xor min k) node
     
-    goL !xorCache Tip = def
+    goL !_ Tip = def
     goL !xorCache (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then goL xorCache l
@@ -204,7 +208,7 @@ findWithDefault def k = k `seq` start
         | otherwise = maxV
       where xorCacheMax = xor k max
     
-    goR !xorCache Tip = def
+    goR !_ Tip = def
     goR !xorCache (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then goR xorCache r
@@ -226,7 +230,7 @@ lookupLT k = k `seq` start
         | min >= k = Nothing
         | otherwise = Just (goL (xor min k) min minV node)
     
-    goL !xorCache min minV Tip = (min, minV)
+    goL !_ min minV Tip = (min, minV)
     goL !xorCache min minV (Bin max maxV l r)
         | max < k = (max, maxV)
         | xorCache < xorCacheMax = goL xorCache min minV l
@@ -234,7 +238,7 @@ lookupLT k = k `seq` start
       where
         xorCacheMax = xor k max
     
-    goR !xorCache Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
     goR !xorCache (Bin min minV l r) fMin fMinV fallback
         | min >= k = getMax fMin fMinV fallback
         | xorCache < xorCacheMin = goR xorCache r min minV l
@@ -243,7 +247,7 @@ lookupLT k = k `seq` start
         xorCacheMin = xor min k
     
     getMax min minV Tip = (min, minV)
-    getMax min minV (Bin max maxV l r) = (max, maxV)
+    getMax _   _   (Bin max maxV _ _) = (max, maxV)
 
 -- | /O(log n)/. Find largest key smaller or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -259,7 +263,7 @@ lookupLE k = k `seq` start
         | min > k = Nothing
         | otherwise = Just (goL (xor min k) min minV node)
     
-    goL !xorCache min minV Tip = (min, minV)
+    goL !_ min minV Tip = (min, minV)
     goL !xorCache min minV (Bin max maxV l r)
         | max <= k = (max, maxV)
         | xorCache < xorCacheMax = goL xorCache min minV l
@@ -267,7 +271,7 @@ lookupLE k = k `seq` start
       where
         xorCacheMax = xor k max
     
-    goR !xorCache Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
     goR !xorCache (Bin min minV l r) fMin fMinV fallback
         | min > k = getMax fMin fMinV fallback
         | xorCache < xorCacheMin = goR xorCache r min minV l
@@ -276,7 +280,7 @@ lookupLE k = k `seq` start
         xorCacheMin = xor min k
     
     getMax min minV Tip = (min, minV)
-    getMax min minV (Bin max maxV l r) = (max, maxV)
+    getMax _   _   (Bin max maxV _ _) = (max, maxV)
 
 -- | /O(log n)/. Find smallest key greater than the given one and return the
 -- corresponding (key, value) pair.
@@ -294,7 +298,7 @@ lookupGT k = k `seq` start
         | max <= k = Nothing
         | otherwise = Just (goR (xor k max) max maxV (Bin min minV l r))
     
-    goL !xorCache Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
+    goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
     goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
         | max <= k = getMin fMax fMaxV fallback
         | xorCache < xorCacheMax = goL xorCache l max maxV r
@@ -302,7 +306,7 @@ lookupGT k = k `seq` start
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max maxV Tip = (max, maxV)
+    goR !_ max maxV Tip = (max, maxV)
     goR !xorCache max maxV (Bin min minV l r)
         | min > k = (min, minV)
         | xorCache < xorCacheMin = goR xorCache max maxV r
@@ -311,7 +315,7 @@ lookupGT k = k `seq` start
         xorCacheMin = xor min k
     
     getMin max maxV Tip = (max, maxV)
-    getMin max maxV (Bin min minV _ _) = (min, minV)
+    getMin _   _   (Bin min minV _ _) = (min, minV)
 
 -- | /O(log n)/. Find smallest key greater or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -330,7 +334,7 @@ lookupGE k = k `seq` start
         | max < k = Nothing
         | otherwise = Just (goR (xor k max) max maxV (Bin min minV l r))
     
-    goL !xorCache Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
+    goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
     goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
         | max < k = getMin fMax fMaxV fallback
         | xorCache < xorCacheMax = goL xorCache l max maxV r
@@ -338,7 +342,7 @@ lookupGE k = k `seq` start
       where
         xorCacheMax = xor k max
     
-    goR !xorCache max maxV Tip = (max, maxV)
+    goR !_ max maxV Tip = (max, maxV)
     goR !xorCache max maxV (Bin min minV l r)
         | min >= k = (min, minV)
         | xorCache < xorCacheMin = goR xorCache max maxV r
@@ -347,7 +351,7 @@ lookupGE k = k `seq` start
         xorCacheMin = xor min k
     
     getMin max maxV Tip = (max, maxV)
-    getMin max maxV (Bin min minV _ _) = (min, minV)
+    getMin _   _   (Bin min minV _ _) = (min, minV)
 
 -- | /O(1)/. The empty map.
 empty :: WordMap a
@@ -369,7 +373,7 @@ insert k v = k `seq` start
         | k < min = NonEmpty k v (endL (xor min k) min minV root)
         | otherwise = NonEmpty k v root
     
-    goL !xorCache min Tip = Bin k v Tip Tip
+    goL !_        _    Tip = Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
@@ -380,7 +384,7 @@ insert k v = k `seq` start
         | otherwise = Bin max v l r
       where xorCacheMax = xor k max
 
-    goR !xorCache max Tip = Bin k v Tip Tip
+    goR !_        _    Tip = Bin k v Tip Tip
     goR !xorCache max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
@@ -423,7 +427,7 @@ insertWith combine k v = k `seq` start
         | k < min = NonEmpty k v (endL (xor min k) min minV root)
         | otherwise = NonEmpty k (combine v minV) root
     
-    goL !xorCache min Tip = Bin k v Tip Tip
+    goL !_        _    Tip = Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
@@ -434,7 +438,7 @@ insertWith combine k v = k `seq` start
         | otherwise = Bin max (combine v maxV) l r
       where xorCacheMax = xor k max
 
-    goR !xorCache max Tip = Bin k v Tip Tip
+    goR !_        _    Tip = Bin k v Tip Tip
     goR !xorCache max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
@@ -503,7 +507,7 @@ delete k = k `seq` start
         | k == min = let DR min' minV' root' = goDeleteMin max maxV l r in NonEmpty min' minV' root'
         | otherwise = NonEmpty min minV (goL (xor min k) min root)
     
-    goL !xorCache min Tip = Tip
+    goL !_        _      Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
@@ -515,7 +519,7 @@ delete k = k `seq` start
                                     in  Bin max' maxV' l r'
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = Tip
+    goR !_        _      Tip = Tip
     goR !xorCache max n@(Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
@@ -563,7 +567,7 @@ adjust f k = k `seq` start
         | k < min = m
         | otherwise = NonEmpty min (f minV) node
     
-    goL !xorCache min Tip = Tip
+    goL !_        _      Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
@@ -572,7 +576,7 @@ adjust f k = k `seq` start
         | otherwise = Bin max (f maxV) l r
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = Tip
+    goR !_        _      Tip = Tip
     goR !xorCache max n@(Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
@@ -616,7 +620,7 @@ update f k = k `seq` start
             Just minV' -> NonEmpty min minV' root
         | otherwise = NonEmpty min minV (goL (xor min k) min root)
     
-    goL !xorCache min Tip = Tip
+    goL !_        _      Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL xorCache min l) r
@@ -630,7 +634,7 @@ update f k = k `seq` start
             Just maxV' -> Bin max maxV' l r
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = Tip
+    goR !_        _      Tip = Tip
     goR !xorCache max n@(Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR xorCache max r)
@@ -786,9 +790,11 @@ map = fmap
 -- > let f key x = (show key) ++ ":" ++ x
 -- > mapWithKey f (fromList [(5,"a"), (3,"b")]) == fromList [(3, "3:b"), (5, "5:a")]
 mapWithKey :: (Key -> a -> b) -> WordMap a -> WordMap b
-mapWithKey f Empty = Empty
-mapWithKey f (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
+mapWithKey f = start
   where
+    start Empty = Empty
+    start (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
+    
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
@@ -801,14 +807,16 @@ mapWithKey f (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
 -- > traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(1, 'a'), (5, 'e')]) == Just (fromList [(1, 'b'), (5, 'f')])
 -- > traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(2, 'c')])           == Nothing
 traverseWithKey :: Applicative f => (Key -> a -> f b) -> WordMap a -> f (WordMap b)
-traverseWithKey f Empty = pure Empty
-traverseWithKey f (NonEmpty min minV root) = NonEmpty min <$> f min minV <*> goL min root
+traverseWithKey f = start
   where
-    goL min Tip = pure Tip
-    goL min (Bin max maxV l r) = (\l' r' maxV' -> Bin max maxV' l' r') <$> goL min l <*> goR max r <*> f max maxV
+    start  Empty = pure Empty
+    start (NonEmpty min minV root) = NonEmpty min <$> f min minV <*> goL root
     
-    goR max Tip = pure Tip
-    goR max (Bin min minV l r) = Bin min <$> f min minV <*> goL min l <*> goR max r
+    goL  Tip = pure Tip
+    goL (Bin max maxV l r) = (\l' r' maxV' -> Bin max maxV' l' r') <$> goL l <*> goR r <*> f max maxV
+    
+    goR  Tip = pure Tip
+    goR (Bin min minV l r) = Bin min <$> f min minV <*> goL l <*> goR r
 
 -- | /O(n)/. The function @'mapAccum'@ threads an accumulating
 -- argument through the map in ascending order of keys.
@@ -824,46 +832,50 @@ mapAccum f = mapAccumWithKey (\a _ x -> f a x)
 -- > let f a k b = (a ++ " " ++ (show k) ++ "-" ++ b, b ++ "X")
 -- > mapAccumWithKey f "Everything:" (fromList [(5,"a"), (3,"b")]) == ("Everything: 3-b 5-a", fromList [(3, "bX"), (5, "aX")])
 mapAccumWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
-mapAccumWithKey f a Empty = (a, Empty)
-mapAccumWithKey f a (NonEmpty min minV root) =
-    let (a',  minV') = f a min minV
-        (a'', root') = goL min root a'
-    in  (a'', NonEmpty min minV' root')
+mapAccumWithKey f = start
   where
-    goL min Tip a = (a, Tip)
-    goL min (Bin max maxV l r) a =
-        let (a',   l') = goL min l a
-            (a'',  r') = goR max r a'
+    start a  Empty = (a, Empty)
+    start a (NonEmpty min minV root) =
+        let (a',  minV') = f a min minV
+            (a'', root') = goL root a'
+        in  (a'', NonEmpty min minV' root')
+    
+    goL  Tip a = (a, Tip)
+    goL (Bin max maxV l r) a =
+        let (a',   l') = goL l a
+            (a'',  r') = goR r a'
             (a''', maxV') = f a'' max maxV
         in  (a''', Bin max maxV' l' r')
     
-    goR max Tip a = (a, Tip)
-    goR max (Bin min minV l r) a =
+    goR  Tip a = (a, Tip)
+    goR (Bin min minV l r) a =
         let (a',   minV') = f a min minV
-            (a'',   l') = goL min l a'
-            (a''',  r') = goR max r a''
+            (a'',   l') = goL l a'
+            (a''',  r') = goR r a''
         in  (a''', Bin min minV' l' r')
 
 -- | /O(n)/. The function @'mapAccumRWithKey'@ threads an accumulating
 -- argument through the map in descending order of keys.
 mapAccumRWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
-mapAccumRWithKey f a Empty = (a, Empty)
-mapAccumRWithKey f a (NonEmpty min minV root) = 
-    let (a',  root') = goL min root a
-        (a'', minV') = f a' min minV
-    in  (a'', NonEmpty min minV' root')
+mapAccumRWithKey f = start
   where
-    goL min Tip a = (a, Tip)
-    goL min (Bin max maxV l r) a =
+    start a Empty = (a, Empty)
+    start a (NonEmpty min minV root) = 
+        let (a',  root') = goL root a
+            (a'', minV') = f a' min minV
+        in  (a'', NonEmpty min minV' root')
+    
+    goL  Tip a = (a, Tip)
+    goL (Bin max maxV l r) a =
         let (a',   maxV') = f a max maxV
-            (a'',  r') = goR max r a'
-            (a''', l') = goL min l a''
+            (a'',  r') = goR r a'
+            (a''', l') = goL l a''
         in  (a''', Bin max maxV' l' r')
     
-    goR max Tip a = (a, Tip)
-    goR max (Bin min minV l r) a =
-        let (a',   r') = goR max r a
-            (a'',  l') = goL min l a'
+    goR  Tip a = (a, Tip)
+    goR (Bin min minV l r) a =
+        let (a',   r') = goR r a
+            (a'',  l') = goL l a'
             (a''', minV') = f a'' min minV
         in  (a''', Bin min minV' l' r')
 
@@ -1040,8 +1052,11 @@ fromList = Data.Foldable.foldr (uncurry insert) empty
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Key, a)]
-toList Empty = []
-toList (NonEmpty min minV node) = (min, minV) : goL node [] where
+toList = start
+  where
+    start  Empty = []
+    start (NonEmpty min minV node) = (min, minV) : goL node []
+    
     goL Tip rest = rest
     goL (Bin max maxV l r) rest = goL l $ goR r $ (max, maxV) : rest
     
@@ -1220,13 +1235,15 @@ showTree = unlines . aux where
     auxNode lined (Bin bound val l r) = ["+--" ++ show bound ++ " " ++ show val, prefix : "  |"] ++ fmap indent (auxNode True l) ++ [prefix : "  |"] ++ fmap indent (auxNode False r)
       where
         prefix = if lined then '|' else ' '
-        indent r = prefix : "  " ++ r
+        indent line = prefix : "  " ++ line
 
 valid :: WordMap a -> Bool
-valid Empty = True
-valid (NonEmpty min _ root) = allKeys (> min) root && goL min root
+valid = start
   where
-    goL min Tip = True
+    start Empty = True
+    start (NonEmpty min _ root) = allKeys (> min) root && goL min root
+    
+    goL _    Tip = True
     goL min (Bin max _ l r) =
            allKeys (< max) l
         && allKeys (< max) r
@@ -1235,7 +1252,7 @@ valid (NonEmpty min _ root) = allKeys (> min) root && goL min root
         && goL min l
         && goR max r
     
-    goR max Tip = True
+    goR _    Tip = True
     goR max (Bin min _ l r) =
            allKeys (> min) l
         && allKeys (> min) r
@@ -1244,7 +1261,7 @@ valid (NonEmpty min _ root) = allKeys (> min) root && goL min root
         && goL min l
         && goR max r
     
-    allKeys p Tip = True
+    allKeys _ Tip = True
     allKeys p (Bin b _ l r) = p b && allKeys p l && allKeys p r
 {-
 -- | /O(1)/. Returns whether the most significant bit of its first
