@@ -472,6 +472,23 @@ insertWith combine k v = k `seq` start
 insertWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
 insertWithKey f k = insertWith (f k) k
 
+-- | /O(min(n,W))/. The expression (@'insertLookupWithKey' f k x map@)
+-- is a pair where the first element is equal to (@'lookup' k map@)
+-- and the second element equal to (@'insertWithKey' f k x map@).
+--
+-- > let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+-- > insertLookupWithKey f 5 "xxx" (fromList [(5,"a"), (3,"b")]) == (Just "a", fromList [(3, "b"), (5, "5:xxx|a")])
+-- > insertLookupWithKey f 7 "xxx" (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a"), (7, "xxx")])
+-- > insertLookupWithKey f 5 "xxx" empty                         == (Nothing,  singleton 5 "xxx")
+--
+-- This is how to define @insertLookup@ using @insertLookupWithKey@:
+--
+-- > let insertLookup kx x t = insertLookupWithKey (\_ a _ -> a) kx x t
+-- > insertLookup 5 "x" (fromList [(5,"a"), (3,"b")]) == (Just "a", fromList [(3, "b"), (5, "x")])
+-- > insertLookup 7 "x" (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a"), (7, "x")])
+insertLookupWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> (Maybe a, WordMap a)
+insertLookupWithKey combine k v m = (lookup k m, insertWithKey combine k v m)
+
 -- | /O(min(n,W))/. Delete a key and its value from the map.
 -- When the key is not a member of the map, the original map is returned.
 delete :: Key -> WordMap a -> WordMap a
