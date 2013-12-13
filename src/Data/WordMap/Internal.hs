@@ -1043,7 +1043,7 @@ toList (NonEmpty min minV node) = (min, minV) : goL node [] where
     
     goR Tip rest = rest
     goR (Bin min minV l r) rest = (min, minV) : (goL l $ goR r $ rest)
-{-
+
 -- | /O(n)/. Filter all values that satisfy some predicate.
 --
 -- > filter (> "a") (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
@@ -1059,18 +1059,42 @@ filterWithKey :: (Key -> a -> Bool) -> WordMap a -> WordMap a
 filterWithKey p = start
   where
     start Empty = Empty
-    start (NonEmpty min root) = goL min root
+    start (NonEmpty min minV root)
+        | p min minV = NonEmpty min minV (goL root)
+        | otherwise = goDeleteL root
     
-    goL min (Tip x)
-        | p min x = NonEmpty min (Tip x)
-        | otherwise = Empty
-    goL min (Bin max l r) = binL (goL min l) (goR max r)
+    goL Tip = Tip
+    goL (Bin max maxV l r)
+        | p max maxV = Bin max maxV (goL l) (goR r)
+        | otherwise = case goDeleteR r of
+            Empty -> goL l
+            NonEmpty max' maxV' r' -> Bin max' maxV' (goL l) r'
     
-    goR max (Tip x)
-        | p max x = NonEmpty max (Tip x)
-        | otherwise = Empty
-    goR max (Bin min l r) = binR (goL min l) (goR max r)
-
+    goR Tip = Tip
+    goR (Bin min minV l r)
+        | p min minV = Bin min minV (goL l) (goR r)
+        | otherwise = case goDeleteL l of
+            Empty -> goR r
+            NonEmpty min' minV' l' -> Bin min' minV' l' (goR r)
+    
+    goDeleteL Tip = Empty
+    goDeleteL (Bin max maxV l r)
+        | p max maxV = case goDeleteL l of
+            Empty -> case goR r of
+                Tip -> NonEmpty max maxV Tip
+                Bin minI minVI lI rI -> NonEmpty minI minVI (Bin max maxV lI rI)
+            NonEmpty min minV l' -> NonEmpty min minV (Bin max maxV l' (goR r))
+        | otherwise = binL (goDeleteL l) (goDeleteR r)
+    
+    goDeleteR Tip = Empty
+    goDeleteR (Bin min minV l r)
+        | p min minV = case goDeleteR r of
+            Empty -> case goL l of
+                Tip -> NonEmpty min minV Tip
+                Bin maxI maxVI lI rI -> NonEmpty maxI maxVI (Bin min minV lI rI)
+            NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goL l) r')
+        | otherwise = binR (goDeleteL l) (goDeleteR r)
+{-
 -- | /O(n)/. Partition the map according to some predicate. The first
 -- map contains all elements that satisfy the predicate, the second all
 -- elements that fail the predicate. See also 'split'.
@@ -1176,18 +1200,20 @@ compareMSB x y = case compare x y of
     LT | x < xor x y -> LT
     GT | y < xor x y -> GT
     _ -> EQ
-
+-}
+{-# INLINE binL #-}
 binL :: WordMap a -> WordMap a -> WordMap a
 binL Empty r = flipBounds r
 binL l Empty = l
-binL (NonEmpty min l) (NonEmpty max r) = NonEmpty min (Bin max l r)
+binL (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty min minV (Bin max maxV l r)
 
+{-# INLINE binR #-}
 binR :: WordMap a -> WordMap a -> WordMap a
 binR Empty r = r
 binR l Empty = flipBounds l
-binR (NonEmpty min l) (NonEmpty max r) = NonEmpty max (Bin min l r)
+binR (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty max maxV (Bin min minV l r)
 
+{-# INLINE flipBounds #-}
 flipBounds Empty = Empty
-flipBounds n@(NonEmpty b1 (Tip x)) = n
-flipBounds (NonEmpty b1 (Bin b2 l r)) = NonEmpty b2 (Bin b1 l r)
--}
+flipBounds n@(NonEmpty _ _ Tip) = n
+flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
