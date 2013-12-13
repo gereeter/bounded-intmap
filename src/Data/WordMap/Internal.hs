@@ -83,6 +83,10 @@ instance NFData a => NFData (Node a) where
 (!) :: WordMap a -> Key -> a
 (!) m k = findWithDefault (error $ "WordMap.!: key " ++ show k ++ " is not an element of the map") k m
 
+-- | Same as 'difference'.
+(\\) :: WordMap a -> WordMap b -> WordMap a
+(\\) = difference
+
 -- | /O(1)/. Is the map empty?
 null :: WordMap a -> Bool
 null Empty = True
