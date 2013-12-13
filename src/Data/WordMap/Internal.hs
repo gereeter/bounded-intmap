@@ -669,6 +669,27 @@ update f k = k `seq` start
 updateWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> WordMap a
 updateWithKey f k = update (f k) k
 
+-- | /O(min(n,W))/. Lookup and update.
+-- The function returns original value, if it is updated.
+-- This is different behavior than 'Data.Map.updateLookupWithKey'.
+-- Returns the original key value if the map entry is deleted.
+--
+-- > let f k x = if x == "a" then Just ((show k) ++ ":new a") else Nothing
+-- > updateLookupWithKey f 5 (fromList [(5,"a"), (3,"b")]) == (Just "a", fromList [(3, "b"), (5, "5:new a")])
+-- > updateLookupWithKey f 7 (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a")])
+-- > updateLookupWithKey f 3 (fromList [(5,"a"), (3,"b")]) == (Just "b", singleton 5 "a")
+updateLookupWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> (Maybe a, WordMap a)
+updateLookupWithKey f k m = (lookup k m, updateWithKey f k m)
+
+-- | /O(min(n,W))/. The expression (@'alter' f k map@) alters the value @x@ at @k@, or absence thereof.
+-- 'alter' can be used to insert, delete, or update a value in an 'IntMap'.
+-- In short : @'lookup' k ('alter' f k m) = f ('lookup' k m)@.
+alter :: (Maybe a -> Maybe a) -> Key -> WordMap a -> WordMap a
+alter f k m | member k m = update (f . Just) k m
+            | otherwise = case f Nothing of
+                Just x -> insert k x m
+                Nothing -> m
+
 -- | /O(n+m)/. The (left-biased) union of two maps.
 -- It prefers the first map when duplicate keys are encountered,
 -- i.e. (@'union' == 'unionWith' 'const'@).
@@ -691,6 +712,47 @@ unionWith f = unionWithKey (const f)
 -- > unionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "5:a|A"), (7, "C")]
 unionWithKey :: (Key -> a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
 unionWithKey combine m1 m2 = foldrWithKey (insertWithKey combine) m2 m1
+
+-- | The union of a list of maps.
+--
+-- > unions [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])]
+-- >     == fromList [(3, "b"), (5, "a"), (7, "C")]
+-- > unions [(fromList [(5, "A3"), (3, "B3")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "a"), (3, "b")])]
+-- >     == fromList [(3, "B3"), (5, "A3"), (7, "C")]
+unions :: [WordMap a] -> WordMap a
+unions = Data.Foldable.foldl' union empty
+
+-- | The union of a list of maps, with a combining operation.
+--
+-- > unionsWith (++) [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])]
+-- >     == fromList [(3, "bB3"), (5, "aAA3"), (7, "C")]
+unionsWith :: (a -> a -> a) -> [WordMap a] -> WordMap a
+unionsWith f = Data.Foldable.foldl' (unionWith f) empty
+
+-- | /O(n+m)/. Difference between two maps (based on keys).
+--
+-- > difference (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 3 "b"
+difference :: WordMap a -> WordMap b -> WordMap a
+difference m1 m2 = foldrWithKey' (\k _ -> delete k) m1 m2
+
+-- | /O(n+m)/. Difference with a combining function.
+--
+-- > let f al ar = if al == "b" then Just (al ++ ":" ++ ar) else Nothing
+-- > differenceWith f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (3, "B"), (7, "C")])
+-- >     == singleton 3 "b:B"
+differenceWith :: (a -> b -> Maybe a) -> WordMap a -> WordMap b -> WordMap a
+differenceWith f = differenceWithKey (const f)
+
+-- | /O(n+m)/. Difference with a combining function. When two equal keys are
+-- encountered, the combining function is applied to the key and both values.
+-- If it returns 'Nothing', the element is discarded (proper set difference).
+-- If it returns (@'Just' y@), the element is updated with a new value @y@.
+--
+-- > let f k al ar = if al == "b" then Just ((show k) ++ ":" ++ al ++ "|" ++ ar) else Nothing
+-- > differenceWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (3, "B"), (10, "C")])
+-- >     == singleton 3 "3:b|B"
+differenceWithKey :: (Key -> a -> b -> Maybe a) -> WordMap a -> WordMap b -> WordMap a
+differenceWithKey f m1 m2 = foldrWithKey' (\k b m -> update (\a -> f k a b) k m) m1 m2
 
 -- | /O(n+m)/. The (left-biased) intersection of two maps (based on keys).
 --
