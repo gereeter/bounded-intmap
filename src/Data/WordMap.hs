@@ -18,10 +18,10 @@ module Data.WordMap (
     , notMember
     , lookup
     , findWithDefault
-{-    , lookupLT
+    , lookupLT
     , lookupGT
     , lookupLE
-    , lookupGE-}
+    , lookupGE
     
     -- * Construction
     , empty
@@ -31,6 +31,7 @@ module Data.WordMap (
     , insert
     , insertWith
     , insertWithKey
+    , insertLookupWithKey
     
     -- ** Delete\/Update
     , delete
@@ -38,17 +39,26 @@ module Data.WordMap (
     , adjustWithKey
     , update
     , updateWithKey
+    , updateLookupWithKey
+    , alter
     
     -- * Combine
     -- ** Union
-{-    , union
+    , union
     , unionWith
     , unionWithKey
+    , unions
+    , unionsWith
+    
+    -- ** Difference
+    , difference
+    , differenceWith
+    , differenceWithKey
     
     -- ** Intersection
     , intersection
     , intersectionWith
-    , intersectionWithKey-}
+    , intersectionWithKey
     
     -- * Traversal
     -- ** Map
@@ -60,7 +70,7 @@ module Data.WordMap (
     , mapAccumRWithKey
     
     -- ** Folds
-{-    , foldr
+    , foldr
     , foldl
     , foldrWithKey
     , foldlWithKey
@@ -70,21 +80,24 @@ module Data.WordMap (
     , foldr'
     , foldl'
     , foldrWithKey'
-    , foldlWithKey'-}
+    , foldlWithKey'
     
     -- * Conversion
+    -- ** Lists
     , toList
     , fromList
     
     -- * Filter
-{-    , filter
+    , filter
     , filterWithKey
-    , partition
+{-    , partition
     , partitionWithKey-}
+    , mapMaybe
+    , mapMaybeWithKey
     
     -- * Debugging
     , showTree
-{-    , valid-}
+    , valid
 ) where
 
 import Data.WordMap.Internal
