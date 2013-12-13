@@ -1164,30 +1164,32 @@ showTree = unlines . aux where
       where
         prefix = if lined then '|' else ' '
         indent r = prefix : "  " ++ r
-{-
+
 valid :: WordMap a -> Bool
 valid Empty = True
-valid (NonEmpty min root) = allKeys (> min) root && goL min root
+valid (NonEmpty min _ root) = allKeys (> min) root && goL min root
   where
-    goL min (Tip x) = True
-    goL min (Bin max l r) =
-           allKeys (< max) r
+    goL min Tip = True
+    goL min (Bin max _ l r) =
+           allKeys (< max) l
+        && allKeys (< max) r
         && allKeys (\k -> xor min k < xor k max) l
         && allKeys (\k -> xor min k > xor k max) r
         && goL min l
         && goR max r
     
-    goR max (Tip x) = True
-    goR max (Bin min l r) =
+    goR max Tip = True
+    goR max (Bin min _ l r) =
            allKeys (> min) l
+        && allKeys (> min) r
         && allKeys (\k -> xor min k < xor k max) l
         && allKeys (\k -> xor min k > xor k max) r
         && goL min l
         && goR max r
     
-    allKeys p (Tip x) = True
-    allKeys p (Bin b l r) = p b && allKeys p l && allKeys p r
-
+    allKeys p Tip = True
+    allKeys p (Bin b _ l r) = p b && allKeys p l && allKeys p r
+{-
 -- | /O(1)/. Returns whether the most significant bit of its first
 -- argument is less significant than the most significant bit of its
 -- second argument.
