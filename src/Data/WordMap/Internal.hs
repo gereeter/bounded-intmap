@@ -1273,6 +1273,7 @@ binR l Empty = flipBounds l
 binR (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty max maxV (Bin min minV l r)
 
 {-# INLINE flipBounds #-}
+flipBounds :: WordMap a -> WordMap a
 flipBounds Empty = Empty
 flipBounds n@(NonEmpty _ _ Tip) = n
 flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
