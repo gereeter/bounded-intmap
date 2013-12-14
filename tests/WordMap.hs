@@ -102,6 +102,42 @@ unitTests = testGroup "Unit Tests"
                     , testCase "insert (empty)" $ insertLookupWithKey f 5 "xxx" empty @?= (Nothing, singleton 5 "xxx")
                     ]
             ]
+        , testGroup "Delete/Update"
+            [ testGroup "delete"
+                [ testCase "present" $ delete 5 (fromList [(5,"a"), (3,"b")]) @?= singleton 3 "b"
+                , testCase "absent (full)" $ delete 7 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a")]
+                , testCase "absent (empty)" $ delete 5 empty @?= (empty :: WordMap Char)
+                ]
+            , testGroup "adjust"
+                [ testCase "present" $ adjust ("new " ++) 5 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "new a")]
+                , testCase "absent (full)" $ adjust ("new " ++) 7 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a")]
+                , testCase "absent (empty)" $ adjust ("new " ++) 7 empty @?= empty
+                ]
+            , let f key x = (show key) ++ ":new " ++ x
+              in testGroup "adjustWithKey"
+                    [ testCase "present" $ adjustWithKey f 5 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "5:new a")]
+                    , testCase "absent (full)" $ adjustWithKey f 7 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a")]
+                    , testCase "absent (empty)" $ adjustWithKey f 7 empty @?= empty
+                    ]
+            , let f x = if x == "a" then Just "new a" else Nothing
+              in testGroup "update"
+                    [ testCase "present (adjust)" $ update f 5 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "new a")]
+                    , testCase "absent" $ update f 7 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a")]
+                    , testCase "present (delete)" $ update f 3 (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "a"
+                    ]
+            , let f k x = if x == "a" then Just ((show k) ++ ":new a") else Nothing
+              in testGroup "updateWithKey"
+                    [ testCase "present (adjust)" $ updateWithKey f 5 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "5:new a")]
+                    , testCase "absent" $ updateWithKey f 7 (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a")]
+                    , testCase "present (delete)" $ updateWithKey f 3 (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "a"
+                    ]
+            , let f k x = if x == "a" then Just ((show k) ++ ":new a") else Nothing
+              in testGroup "updateLookupWithKey"
+                    [ testCase "present (adjust)" $ updateLookupWithKey f 5 (fromList [(5,"a"), (3,"b")]) @?= (Just "a", fromList [(3, "b"), (5, "5:new a")])
+                    , testCase "absent" $ updateLookupWithKey f 7 (fromList [(5,"a"), (3,"b")]) @?= (Nothing,  fromList [(3, "b"), (5, "a")])
+                    , testCase "present (delete)" $ updateLookupWithKey f 3 (fromList [(5,"a"), (3,"b")]) @?= (Just "b", singleton 5 "a")
+                    ]
+            ]
         ]
     ]
 
