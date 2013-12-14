@@ -26,3 +26,10 @@ benchmark intset
     Main-Is: IntSet.hs
     Build-Depends: base, containers, deepseq, criterion, bounded-intmap
     ghc-options:   -Wall
+
+test-suite wordmap
+    Type: exitcode-stdio-1.0
+    HS-Source-Dirs: tests
+    Main-Is: WordMap.hs
+    Build-Depends: base, tasty, QuickCheck, tasty-quickcheck, tasty-hunit, bounded-intmap
+    GHC-Options: -Wall
