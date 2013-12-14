@@ -139,6 +139,32 @@ unitTests = testGroup "Unit Tests"
                     ]
             ]
         ]
+    , testGroup "Combine"
+        [ testGroup "Union"
+            [ testCase "union" $ union (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= fromList [(3, "b"), (5, "a"), (7, "C")]
+            , testCase "unionWith" $ unionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= fromList [(3, "b"), (5, "aA"), (7, "C")]
+            , let f key left_value right_value = (show key) ++ ":" ++ left_value ++ "|" ++ right_value
+              in testCase "unionWithKey" $ unionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= fromList [(3, "b"), (5, "5:a|A"), (7, "C")]
+            , testGroup "unions"
+                [ testCase "lower->upper" $ unions [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])] @?= fromList [(3, "b"), (5, "a"), (7, "C")]
+                , testCase "upper->lower" $ unions [(fromList [(5, "A3"), (3, "B3")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "a"), (3, "b")])] @?= fromList [(3, "B3"), (5, "A3"), (7, "C")]
+                ]
+            , testCase "unionsWith" $ unionsWith (++) [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])] @?= fromList [(3, "bB3"), (5, "aAA3"), (7, "C")]
+            ]
+        , testGroup "Difference"
+            [ testCase "difference" $ difference (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 3 "b"
+            , let f al ar = if al == "b" then Just (al ++ ":" ++ ar) else Nothing
+              in testCase "differenceWith" $ differenceWith f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (3, "B"), (7, "C")]) @?= singleton 3 "b:B"
+            , let f k al ar = if al == "b" then Just ((show k) ++ ":" ++ al ++ "|" ++ ar) else Nothing
+              in testCase "differenceWithKey" $ differenceWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (3, "B"), (10, "C")]) @?= singleton 3 "3:b|B"
+            ]
+        , testGroup "Intersection"
+            [ testCase "intersection" $ intersection (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 5 "a"
+            , testCase "intersectionWith" $ intersectionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 5 "aA"
+            , let f k al ar = (show k) ++ ":" ++ al ++ "|" ++ ar
+              in testCase "intersectionWithKey" $ intersectionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 5 "5:a|A"
+            ]
+        ]
     ]
 
 ---------------------------
