@@ -28,6 +28,149 @@ I deviate from the original implementation in a couple of ways:
 
 Description of the internals
 ----------------------------
+### The basic integer map: the bitwise trie ###
+We are trying to create an efficient, simple mapping from integers to values. The most common approaches for these are hash tables, which are not persistent (though we can come close with HAMTs), and binary search trees, which work well, but don't use any special properties of the integer. To come up with this mapping, we need to think of integers not as numbers, but instead as strings of bits. Once we change our mindset, we can use the standard _trie_ data structure to build our mapping. As bits are particularly simple, so is the resulting structure:
+
+```haskell
+data WordMap a = Bin (WordMap a) (WordMap a) | Tip a | Nil
+```
+
+The `Bin` constructor represents a bitwise branch, and the `Tip` constructor comes after (on my machine) 64 `Bin` construtors in the tree. The associated basic operations are fairly simple:
+
+```haskell
+lookup :: Word -> WordMap a -> Maybe a
+lookup k = go 0
+  where
+    go b (Bin l r) = if testBit b k
+                     then go (b + 1) l
+                     else go (b + 1) r
+    go _ (Tip x) = Just x
+    go _ Nil = Nothing
+
+insert :: Word -> a -> WordMap a -> WordMap a
+insert k a = go 0
+  where
+    go 64 _ = Tip a
+    go b (Bin l r) = if testBit b k
+                     then Bin (go (b + 1) l) r
+                     else Bin l (go (b + 1) r)
+    go b _ = if testBit b k
+             then Bin (go (b + 1) Nil) Nil
+             else Bin Nil (go (b + 1) Nil)
+```
+
+`delete` follows similarly, and `union` isn't to hard - I leave it as an exercise to the reader. Unfortunately, this approach is horribly slow and space efficient. To see why, let us look at the tree structure for `singleton 5 "hello"`:
+
+```
+\0
+ \0
+  \0
+   \0
+    \0
+     \0
+      \0
+       \0
+        \0
+         \0
+          \0
+           \0
+            \0
+           1/
+            \0
+           1/
+         "hello"
+```
+
+Note that, for brevity, I have shortened the word size to 16 bits - the diagram is 4 times larger for our 64 bit system. In this atrocious tree structure, there is one pointer for every bit - a 64 fold explosion in space. Arguably worse is the fact that every single `lookup` or `insert` or `delete` must traverse 64 pointers, resulting in 64 cache misses and a terrible runtime. So, how do we fix this?
+
+### Path compression: PATRICIA trees and stock `Data.IntMap` ###
+The key observation to reducing the space usage is that we can compress nodes that only have one child together - since they form a linear chain, we can simply concatenate the bits within that chain. For example, again temporarily shortening the word size to 16 bits:
+
+```
+singleton 5 "hello":
+
+| 0000000000000101
+"hello"
+
+fromList [(1, "1"), (4, "4"), (5, "5")]:
+
+     | 0000000000000___
+001/  \10_
+"1"  0/ \1
+    "4" "5"
+```
+
+This clearly produces a much more space efficient structure, and the basic operations, while more complicated, are still straightforward. In Haskell, the structure is:
+
+```haskell
+data WordMap a = Bin Prefix Mask (WordMap a) (WordMap a) | Tip Word a | Nil
+```
+
+Note that in the above representation, the `Mask` is used to tell how long the `Prefix` is, and the `Word` in the `Tip` nodes is to avoid the for using `Bin` for singletons. This final representation is known as the big-endian PATRICIA tree, and is what today's `Data.IntMap` uses internally, albeit with some optimizations like strictness and unpacking, which I have omitted for simplicity. However, we can take this structure a few steps farther, which is the goal of this package.
+
+### Implicit prefixes: a simpler representation ###
+
+The central observation for this step comes from Edward Kmett, as mentioned in a previous section. In the PATRICIA tree representation, we explicitly stored the common prefix of all the keys in a subtree. However, this prefix is not needed if we know what the largest and smallest keys stored within a subtree are - the common prefix of all the keys is just the common prefix of the minimum and maximum keys. Using this observation, we get another representation:
+
+```haskell
+data WordMap a = Bin Word Word (WordMap a) (WordMap a) | Tip Word a | Nil
+```
+
+In tree form:
+```
+singleton 5 hello:
+
+| 5
+"hello"
+
+fromList [(1, "1"), (4, "4"), (5, "5")]:
+
+    | (1, 5)
+  1/  \ (4, 5)
+"1"  4/ \5
+    "4"  "5"
+```
+
+Traversing this tree efficiently is a bit more difficult, but still possible. For details, see the section below titled "Figuring out which way to go". This representation, since it gives exact minimums and maximums, can actually be more efficient than the PATRICIA tree, as seaches can terminate earlier. The range of values between the minimum and maximum is generally smaller than the range of values with the correct prefix, and so searches will know earlier if they are going to fail. However, the big gains of this representation come after a few more steps.
+
+### Removing redundancy ###
+You may have noticed that the above representation store many keys repeatedly - in the {1,4,5} example, 1 was stored twice, 4 was stored twice, and 5 was stored three times. The reason for this is very simple. In the {1,4,5} example, we knew that the minimum was 1 and the maximum was 5. At the first branch, we split the set into two parts - {1} and {4,5}. However, the minimum of the smaller set was exactly the minimum of the original set. Similarly, the maximum of the larger set was exactly the maximum of the original set. Since we always travers the tree downward, this information is not needed. We can restructure the tree to only store 1 new value at each branch, removing the redundancy. Note that we also have to add an extra value at the root node, where this transformation does not work. In summary:
+
+```haskell
+data WordMap a = Empty | NonEmpty Word (Node a)
+data Node a = Bin Word (Node a) (Node a) | Tip a
+```
+
+In tree form:
+```
+    | 1
+    | 5
+   / \
+"1" 4/ \
+   "4"  "5"
+```
+
+With this optimization, the operations get more complicated again, but we have achieved something amazing - this new representation is more memory efficient than stock `Data.IntMap`. We will improve this again, as well as the runtime, with our final optimization.
+
+### Moving the values upward ###
+If you look carefully at the tree structure from the previous section, you will notice that we removed the redundancy perfectly - every key is stored exactly once. However, if the keys are stored in a unique location in the tree, why are the values stored far away? We can move the values upward in the tree to pair them with their keys and so get a simpler structure.
+
+In Haskell:
+```haskell
+data WordMap a = Empty | NonEmpty Word a (Node a)
+data Node a = Bin Word a (Node a) (Node a) | Tip
+```
+
+In tree form:
+```
+    | 1 "1"
+    | 5 "5"
+   / \
+     / \ 4 "4"
+```
+
+At first, this seems to improve neither runtime nor space usage - after all, all we did was move the values around. However, the `Tip` constructor is now empty, meaning that it can be shared among all the leaves of every tree. The `Tip` constructor essentiall disappears from the space usage profile, and we get a gain in memory. The runtime effect is even larger. Because the values are now high in the tree, functions like `lookup` don't have to go all the way to the leaves. This means following fewer pointers, which means fewer cache misses and just a shorter loop. Admittedly, after all this work, our functions have become much larger than the sizes they started with, but we have won speed gains and significant memory gains from the current state of the art.
+
 ### Figuring out which way to go ###
 Suppose we are looking up a key `k` in a tree. We know that the minimum key in the tree is `min` and that the maximum key is `max`. Represented in binary:
 
