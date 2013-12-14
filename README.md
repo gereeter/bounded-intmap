@@ -224,7 +224,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `insert`. Raw.
 * `insertWith`. Raw.
 * `insertWithKey`. Delegated, using `insertWith`.
-* `insertLookupWithKey`. Delegated, using `lookup` and `insertWithKey`.
+* `insertLookupWithKey`. Raw.
 
 #### Delete/Update
 * `delete`. Raw.

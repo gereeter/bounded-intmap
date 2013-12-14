@@ -495,7 +495,54 @@ insertWithKey f k = insertWith (f k) k
 -- > insertLookup 5 "x" (fromList [(5,"a"), (3,"b")]) == (Just "a", fromList [(3, "b"), (5, "x")])
 -- > insertLookup 7 "x" (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a"), (7, "x")])
 insertLookupWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> (Maybe a, WordMap a)
-insertLookupWithKey combine k v m = (lookup k m, insertWithKey combine k v m)
+insertLookupWithKey combine k v = k `seq` start
+  where
+    start Empty = (Nothing, NonEmpty k v Tip)
+    start (NonEmpty min minV root)
+        | k > min = let (mv, root') = goL (xor min k) min root
+                    in  (mv, NonEmpty min minV root')
+        | k < min = (Nothing, NonEmpty k v (endL (xor min k) min minV root))
+        | otherwise = (Just minV, NonEmpty k (combine k v minV) root)
+    
+    goL !_        _    Tip = (Nothing, Bin k v Tip Tip)
+    goL !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then let (mv, l') = goL xorCache min l
+                         in  (mv, Bin max maxV l' r)
+                    else let (mv, r') = goR xorCacheMax max r
+                         in  (mv, Bin max maxV l r')
+        | k > max = if xor min max < xorCacheMax
+                    then (Nothing, Bin k v (Bin max maxV l r) Tip)
+                    else (Nothing, Bin k v l (endR xorCacheMax max maxV r))
+        | otherwise = (Just maxV, Bin max (combine k v maxV) l r)
+      where xorCacheMax = xor k max
+
+    goR !_        _    Tip = (Nothing, Bin k v Tip Tip)
+    goR !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then let (mv, r') = goR xorCache max r
+                         in  (mv, Bin min minV l r')
+                    else let (mv, l') = goL xorCacheMin min l
+                         in  (mv, Bin min minV l' r)
+        | k < min = if xor min max < xorCacheMin
+                    then (Nothing, Bin k v Tip (Bin min minV l r))
+                    else (Nothing, Bin k v (endL xorCacheMin min minV l) r)
+        | otherwise = (Just minV, Bin min (combine k v minV) l r)
+      where xorCacheMin = xor min k
+    
+    endL !xorCache min minV = finishL
+      where
+        finishL Tip = Bin min minV Tip Tip
+        finishL (Bin max maxV l r)
+            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
+            | otherwise = Bin max maxV (finishL l) r
+
+    endR !xorCache max maxV = finishR
+      where
+        finishR Tip = Bin max maxV Tip Tip
+        finishR (Bin min minV l r)
+            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
+            | otherwise = Bin min minV l (finishR r)
 
 -- | /O(min(n,W))/. Delete a key and its value from the map.
 -- When the key is not a member of the map, the original map is returned.
