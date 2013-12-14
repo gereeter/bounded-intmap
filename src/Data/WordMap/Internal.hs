@@ -1284,6 +1284,98 @@ findMax (NonEmpty min minV root) = case root of
     Tip -> (min, minV)
     Bin max maxV _ _ -> (max, maxV)
 
+-- | /O(min(n,W))/. Delete the minimal key. Returns an empty map if the map is empty.
+--
+-- Note that this is a change of behaviour for consistency with 'Data.Map.Map' &#8211;
+-- versions prior to 0.5 threw an error if the 'IntMap' was already empty.
+deleteMin :: WordMap a -> WordMap a
+deleteMin Empty = Empty
+deleteMin m = delete (fst (findMin m)) m
+
+-- | /O(min(n,W))/. Delete the maximal key. Returns an empty map if the map is empty.
+--
+-- Note that this is a change of behaviour for consistency with 'Data.Map.Map' &#8211;
+-- versions prior to 0.5 threw an error if the 'IntMap' was already empty.
+deleteMax :: WordMap a -> WordMap a
+deleteMax Empty = Empty
+deleteMax m = delete (fst (findMax m)) m
+
+-- | /O(min(n,W))/. Delete and find the minimal element.
+deleteFindMin :: WordMap a -> ((Key, a), WordMap a)
+deleteFindMin m = let (k, a) = findMin m
+                  in ((k, a), delete k m)
+
+-- | /O(min(n,W))/. Delete and find the maximal element.
+deleteFindMax :: WordMap a -> ((Key, a), WordMap a)
+deleteFindMax m = let (k, a) = findMax m
+                  in ((k, a), delete k m)
+
+-- | /O(min(n,W))/. Update the value at the minimal key.
+--
+-- > updateMin (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "Xb"), (5, "a")]
+-- > updateMin (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
+updateMin :: (a -> Maybe a) -> WordMap a -> WordMap a
+updateMin _ Empty = Empty
+updateMin f m = update f (fst (findMin m)) m
+
+-- | /O(min(n,W))/. Update the value at the maximal key.
+--
+-- > updateMax (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "Xa")]
+-- > updateMax (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
+updateMax :: (a -> Maybe a) -> WordMap a -> WordMap a
+updateMax _ Empty = Empty
+updateMax f m = update f (fst (findMax m)) m
+
+-- | /O(min(n,W))/. Update the value at the minimal key.
+--
+-- > updateMinWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"3:b"), (5,"a")]
+-- > updateMinWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
+updateMinWithKey :: (Key -> a -> Maybe a) -> WordMap a -> WordMap a
+updateMinWithKey _ Empty = Empty
+updateMinWithKey f m = updateWithKey f (fst (findMin m)) m
+
+-- | /O(min(n,W))/. Update the value at the maximal key.
+--
+-- > updateMaxWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"b"), (5,"5:a")]
+-- > updateMaxWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
+updateMaxWithKey :: (Key -> a -> Maybe a) -> WordMap a -> WordMap a
+updateMaxWithKey _ Empty = Empty
+updateMaxWithKey f m = updateWithKey f (fst (findMax m)) m
+
+-- | /O(min(n,W))/. Retrieves the minimal key of the map, and the map
+-- stripped of that element, or 'Nothing' if passed an empty map.
+minView :: WordMap a -> Maybe (a, WordMap a)
+minView Empty = Nothing
+minView m = let (k, a) = findMin m
+            in Just (a, delete k m)
+
+-- | /O(min(n,W))/. Retrieves the maximal key of the map, and the map
+-- stripped of that element, or 'Nothing' if passed an empty map.
+maxView :: WordMap a -> Maybe (a, WordMap a)
+maxView Empty = Nothing
+maxView m = let (k, a) = findMax m
+            in Just (a, delete k m)
+
+-- | /O(min(n,W))/. Retrieves the minimal (key,value) pair of the map, and
+-- the map stripped of that element, or 'Nothing' if passed an empty map.
+--
+-- > minViewWithKey (fromList [(5,"a"), (3,"b")]) == Just ((3,"b"), singleton 5 "a")
+-- > minViewWithKey empty == Nothing
+minViewWithKey :: WordMap a -> Maybe ((Key, a), WordMap a)
+minViewWithKey Empty = Nothing
+minViewWithKey m = let (k, a) = findMin m
+                   in Just ((k, a), delete k m)
+
+-- | /O(min(n,W))/. Retrieves the maximal (key,value) pair of the map, and
+-- the map stripped of that element, or 'Nothing' if passed an empty map.
+--
+-- > maxViewWithKey (fromList [(5,"a"), (3,"b")]) == Just ((5,"a"), singleton 3 "b")
+-- > maxViewWithKey empty == Nothing
+maxViewWithKey :: WordMap a -> Maybe ((Key, a), WordMap a)
+maxViewWithKey Empty = Nothing
+maxViewWithKey m = let (k, a) = findMax m
+                   in Just ((k, a), delete k m)
+
 ----------------------------
 
 -- | Show the tree that implements the map.

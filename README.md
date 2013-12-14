@@ -111,7 +111,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `intersectionWithKey`. Delegated, using `mapMaybeWithKey` and lots of `lookup`s.
 
 #### Universal combining function
-* `mergeWithKey`. Unimplemented. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.
+* `mergeWithKey`. _Unimplemented_. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.
 
 ### Traversal
 #### Map
@@ -180,18 +180,18 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 ### Min/Max
 * `findMin`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
 * `findMax`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
-* `deleteMin`. _Unimplemented_.
-* `deleteMax`. _Unimplemented_.
-* `deleteFindMin`. _Unimplemented_.
-* `deleteFindMax`. _Unimplemented_.
-* `updateMin`. _Unimplemented_.
-* `updateMax`. _Unimplemented_.
-* `updateMinWithKey`. _Unimplemented_.
-* `updateMaxWithKey`. _Unimplemented_.
-* `minView`. _Unimplemented_.
-* `maxView`. _Unimplemented_.
-* `minViewWithKey`. _Unimplemented_.
-* `maxViewWithKey`. _Unimplemented_.
+* `deleteMin`. Delegated, using `findMin` and `delete`.
+* `deleteMax`. Delegated, using `findMin` and `delete`.
+* `deleteFindMin`. Delegated, using `findMin` and `delete`.
+* `deleteFindMax`. Delegated, using `findMin` and `delete`.
+* `updateMin`. Delegated, using `findMin` and `update`.
+* `updateMax`. Delegated, using `findMin` and `update`.
+* `updateMinWithKey`. Delegated, using `findMin` and `updateWithKey`.
+* `updateMaxWithKey`. Delegated, using `findMin` and `updateWithKey`.
+* `minView`. Delegated, using `findMin` and `delete`.
+* `maxView`. Delegated, using `findMin` and `delete`.
+* `minViewWithKey`. Delegated, using `findMin` and `delete`.
+* `maxViewWithKey`. Delegated, using `findMin` and `delete`.
 
 ### Debugging
 Note that this section shouldn't matter to the average user.
