@@ -1093,10 +1093,6 @@ foldlWithKey' f z = start
     
     s = ($!)
 
--- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
-fromList :: [(Key, a)] -> WordMap a
-fromList = Data.Foldable.foldr (uncurry insert) empty
-
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Key, a)]
 toList = start
@@ -1109,6 +1105,10 @@ toList = start
     
     goR Tip rest = rest
     goR (Bin min minV l r) rest = (min, minV) : (goL l $ goR r $ rest)
+
+-- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
+fromList :: [(Key, a)] -> WordMap a
+fromList = Data.Foldable.foldr (uncurry insert) empty
 
 -- | /O(n)/. Filter all values that satisfy some predicate.
 --
@@ -1271,6 +1271,19 @@ splitLookup k = k `seq` start
       where
         xorCacheMax = xor k max
 -}
+
+-- | /O(1)/. The minimal key of the map.
+findMin :: WordMap a -> (Key, a)
+findMin Empty = error "findMin: empty map has no minimal element"
+findMin (NonEmpty min minV _) = (min, minV)
+
+-- | /O(1)/. The maximal key of the map.
+findMax :: WordMap a -> (Key, a)
+findMax Empty = error "findMin: empty map has no minimal element"
+findMax (NonEmpty min minV root) = case root of
+    Tip -> (min, minV)
+    Bin max maxV _ _ -> (max, maxV)
+
 ----------------------------
 
 -- | Show the tree that implements the map.
