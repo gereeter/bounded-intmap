@@ -89,6 +89,18 @@ unitTests = testGroup "Unit Tests"
                 , testCase "insert (full)" $ insertWith (++) 7 "xxx" (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a"), (7, "xxx")]
                 , testCase "insert (empty)" $ insertWith (++) 5 "xxx" empty @?= singleton 5 "xxx"
                 ]
+            , let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+              in testGroup "insertWithKey"
+                    [ testCase "override" $ insertWithKey f 5 "xxx" (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "5:xxx|a")]
+                    , testCase "insert (full)" $ insertWithKey f 7 "xxx" (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "a"), (7, "xxx")]
+                    , testCase "insert (empty)" $ insertWithKey f 5 "xxx" empty @?= singleton 5 "xxx"
+                    ]
+            , let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+              in testGroup "insertLookupWithKey"
+                    [ testCase "override" $ insertLookupWithKey f 5 "xxx" (fromList [(5,"a"), (3,"b")]) @?= (Just "a", fromList [(3, "b"), (5, "5:xxx|a")])
+                    , testCase "insert (full)" $ insertLookupWithKey f 7 "xxx" (fromList [(5,"a"), (3,"b")]) @?= (Nothing, fromList [(3, "b"), (5, "a"), (7, "xxx")])
+                    , testCase "insert (empty)" $ insertLookupWithKey f 5 "xxx" empty @?= (Nothing, singleton 5 "xxx")
+                    ]
             ]
         ]
     ]
