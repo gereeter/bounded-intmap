@@ -734,7 +734,68 @@ updateWithKey f k = update (f k) k
 -- > updateLookupWithKey f 7 (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a")])
 -- > updateLookupWithKey f 3 (fromList [(5,"a"), (3,"b")]) == (Just "b", singleton 5 "a")
 updateLookupWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> (Maybe a, WordMap a)
-updateLookupWithKey f k m = (lookup k m, updateWithKey f k m)
+updateLookupWithKey f k = k `seq` start
+  where
+    start Empty = (Nothing, Empty)
+    start m@(NonEmpty min minV Tip)
+        | k == min = case f min minV of
+            Nothing -> (Just minV, Empty)
+            Just minV' -> (Just minV, NonEmpty min minV' Tip)
+        | otherwise = (Nothing, m)
+    start m@(NonEmpty min minV root@(Bin max maxV l r))
+        | k < min = (Nothing, m)
+        | k == min = case f min minV of
+            Nothing -> let DR min' minV' root' = goDeleteMin max maxV l r
+                       in (Just minV, NonEmpty min' minV' root')
+            Just minV' -> (Just minV, NonEmpty min minV' root)
+        | otherwise = let (mv, root') = goL (xor min k) min root
+                      in  (mv, NonEmpty min minV root')
+    
+    goL !_        _      Tip = (Nothing, Tip)
+    goL !xorCache min n@(Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then let (mv, l') = goL xorCache min l
+                         in  (mv, Bin max maxV l' r)
+                    else let (mv, r') = goR xorCacheMax max r
+                         in  (mv, Bin max maxV l r')
+        | k > max = (Nothing, n)
+        | otherwise = case f max maxV of
+            Nothing -> case r of
+                Tip -> (Just maxV, l)
+                Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                                        in (Just maxV, Bin max' maxV' l r')
+            Just maxV' -> (Just maxV, Bin max maxV' l r)
+      where xorCacheMax = xor k max
+    
+    goR !_        _      Tip = (Nothing, Tip)
+    goR !xorCache max n@(Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then let (mv, r') = goR xorCache max r
+                         in  (mv, Bin min minV l r')
+                    else let (mv, l') = goL xorCacheMin min l
+                         in  (mv, Bin min minV l' r)
+        | k < min = (Nothing, n)
+        | otherwise = case f min minV of
+            Nothing -> case l of
+                Tip -> (Just minV, r)
+                Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                                        in (Just minV, Bin min' minV' l' r)
+            Just minV' -> (Just minV, Bin min minV' l r)
+      where xorCacheMin = xor min k
+    
+    goDeleteMin max maxV l r = case l of
+        Tip -> case r of
+            Tip -> DR max maxV r
+            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
+        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
+                                in  DR min minV (Bin max maxV l' r)
+    
+    goDeleteMax min minV l r = case r of
+        Tip -> case l of
+            Tip -> DR min minV l
+            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
+        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
+                                in  DR max maxV (Bin min minV l r')
 
 -- | /O(min(n,W))/. The expression (@'alter' f k map@) alters the value @x@ at @k@, or absence thereof.
 -- 'alter' can be used to insert, delete, or update a value in an 'IntMap'.

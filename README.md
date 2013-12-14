@@ -232,7 +232,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `adjustWithkey`. Delegated, using `adjust`.
 * `update`. Raw.
 * `updateWithKey`. Delegated, using `update`.
-* `updateLookupWithKey`. Delegated, using `lookup` and `updateWithKey`.
+* `updateLookupWithKey`. Raw.
 * `alter`. Delegated, using `member` and either `update` or `insert`.
 
 ### Combine
