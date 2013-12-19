@@ -1071,7 +1071,7 @@ intersectionWithKey combine = start
     
     -- TODO: This scheme might produce lots of unnecessary flipBounds calls. This should be rectified.
     
-    goL1 !_    !_   !_  !_   Tip = Empty
+    goL1 _     !_   !_  !_   Tip = Empty
     goL1 minV1 min1 Tip min2 n2  = goLookupL1 min1 minV1 (xor min1 min2) n2
     goL1 _ min1 (Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = Empty
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
@@ -1086,7 +1086,7 @@ intersectionWithKey combine = start
                 NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max1 (combine max1 maxV1 maxV2) l' (goRFused max1 r1 r2))
         GT -> goL1 minV1 min1 l1 min2 n2
     
-    goL2 !_    !_   Tip !_   !_  = Empty
+    goL2 _     !_   Tip !_   !_  = Empty
     goL2 minV2 min1 n1  min2 Tip = goLookupL2 min2 minV2 (xor min1 min2) n1
     goL2 _ _ (Bin max1 _ _ _) min2 (Bin _ _ _ _) | min2 > max1 = Empty
     goL2 minV2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
@@ -1101,20 +1101,22 @@ intersectionWithKey combine = start
            | max1 < max2 -> flipBounds $ goR1 maxV1 max1 r1 max2 (Bin min2 minV2 l2 r2)
            | otherwise -> flipBounds $ NonEmpty max1 (combine max1 maxV1 maxV2) (goRFused max1 r1 (Bin min2 minV2 l2 r2))
     
-    goLFused !_ Tip !_ = Tip
-    goLFused !_ !_ Tip = Tip
-    goLFused min n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min max1) (xor min max2) of
-        LT -> goLFused min n1 l2
-        EQ | max1 > max2 -> case goR2 maxV2 max1 r1 max2 r2 of
-                Empty -> goLFused min l1 l2
-                NonEmpty max' maxV' r' -> Bin max' maxV' (goLFused min l1 l2) r'
-           | max1 < max2 -> case goR1 maxV1 max1 r1 max2 r2 of
-                Empty -> goLFused min l1 l2
-                NonEmpty max' maxV' r' -> Bin max' maxV' (goLFused min l1 l2) r'
-           | otherwise -> Bin max1 (combine max1 maxV1 maxV2) (goLFused min l1 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
-        GT -> goLFused min l1 n2
+    goLFused min = loop
+      where
+        loop Tip !_ = Tip
+        loop !_ Tip = Tip
+        loop n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min max1) (xor min max2) of
+            LT -> loop n1 l2
+            EQ | max1 > max2 -> case goR2 maxV2 max1 r1 max2 r2 of
+                    Empty -> loop l1 l2
+                    NonEmpty max' maxV' r' -> Bin max' maxV' (loop l1 l2) r'
+               | max1 < max2 -> case goR1 maxV1 max1 r1 max2 r2 of
+                    Empty -> loop l1 l2
+                    NonEmpty max' maxV' r' -> Bin max' maxV' (loop l1 l2) r'
+               | otherwise -> Bin max1 (combine max1 maxV1 maxV2) (loop l1 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+            GT -> loop l1 n2
     
-    goR1 !_    !_   !_  !_   Tip = Empty
+    goR1 _     !_   !_  !_   Tip = Empty
     goR1 maxV1 max1 Tip max2 n2  = goLookupR1 max1 maxV1 (xor max1 max2) n2
     goR1 _ max1 (Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = Empty
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
@@ -1129,7 +1131,7 @@ intersectionWithKey combine = start
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) r')
         GT -> goR1 maxV1 max1 r1 max2 n2
     
-    goR2 !_    !_   Tip !_   !_  = Empty
+    goR2 _     !_   Tip !_   !_  = Empty
     goR2 maxV2 max1 n1  max2 Tip = goLookupR2 max2 maxV2 (xor max1 max2) n1
     goR2 _ _ (Bin min1 _ _ _) max2 (Bin _ _ _ _) | min1 > max2 = Empty
     goR2 maxV2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
@@ -1144,18 +1146,20 @@ intersectionWithKey combine = start
            | min1 > min2 -> flipBounds $ goL1 minV1 min1 l1 min2 (Bin max2 maxV2 l2 r2)
            | otherwise -> flipBounds $ NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 l1 (Bin max2 maxV2 l2 r2))
     
-    goRFused !_ Tip !_ = Tip
-    goRFused !_ !_ Tip = Tip
-    goRFused max n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
-        LT -> goRFused max n1 r2
-        EQ | min1 < min2 -> case goL2 minV2 min1 l1 min2 l2 of
-                Empty -> goRFused max r1 r2
-                NonEmpty min' minV' l' -> Bin min' minV' l' (goRFused max r1 r2)
-           | min1 > min2 -> case goL1 minV1 min1 l1 min2 l2 of
-                Empty -> goRFused max r1 r2
-                NonEmpty min' minV' l' -> Bin min' minV' l' (goRFused max r1 r2)
-           | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (goRFused max r1 r2) -- we choose max1 arbitrarily, as max1 == max2
-        GT -> goRFused max r1 n2
+    goRFused max = loop
+      where
+        loop Tip !_ = Tip
+        loop !_ Tip = Tip
+        loop n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
+            LT -> loop n1 r2
+            EQ | min1 < min2 -> case goL2 minV2 min1 l1 min2 l2 of
+                    Empty -> loop r1 r2
+                    NonEmpty min' minV' l' -> Bin min' minV' l' (loop r1 r2)
+               | min1 > min2 -> case goL1 minV1 min1 l1 min2 l2 of
+                    Empty -> loop r1 r2
+                    NonEmpty min' minV' l' -> Bin min' minV' l' (loop r1 r2)
+               | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (loop r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+            GT -> loop r1 n2
     
     goLookupL1 !_ _ !_ Tip = Empty
     goLookupL1 k v !xorCache (Bin max maxV l r)
