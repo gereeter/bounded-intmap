@@ -83,6 +83,16 @@ main = do
                 , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
+        , bgroup "intersectionWithKey"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (uncurry (M.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (denseM, sparseM)
+                , bench "WordMap" $ whnf (uncurry (W.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (uncurry (M.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseM, sparseM')
+                , bench "WordMap" $ whnf (uncurry (W.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
+                ]
+            ]
         ]
   where
     elems = zip keys values
