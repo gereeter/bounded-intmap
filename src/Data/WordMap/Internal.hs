@@ -1126,7 +1126,7 @@ intersectionWithKey combine = start
            | otherwise -> flipBounds $ NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 (Bin max1 maxV1 l1 r1) l2)
         EQ | min1 < min2 -> binR (goL2 minV2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
-           | otherwise -> case goR1 maxV1 min1 l1 min2 l2 of
+           | otherwise -> case goR1 maxV1 max1 r1 max2 r2 of
                 Empty -> flipBounds (NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2))
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) r')
         GT -> goR1 maxV1 max1 r1 max2 n2
