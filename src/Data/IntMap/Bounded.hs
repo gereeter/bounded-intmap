@@ -32,7 +32,7 @@ module Data.IntMap.Bounded (
     
     -- * Combine
     -- ** Union
-{-    , union
+    , union
     , unionWith
     , unionWithKey
     
@@ -44,7 +44,7 @@ module Data.IntMap.Bounded (
     -- * Traversal
     -- ** Map
     , map
-    , mapWithKey-}
+    , mapWithKey
     
     -- * Conversions
 {-    , toList-}
@@ -52,7 +52,7 @@ module Data.IntMap.Bounded (
     
     -- * Debugging
     , showTree
-{-    , valid-}
+    , valid
 ) where
 
 import Control.DeepSeq
@@ -87,11 +87,11 @@ instance Traversable IntMap where
     traverse f (IntMap (NonEmpty min (Bin max l r)))
         | fromIntegral (xor min max) < (0 :: Int) = IntMap . NonEmpty min <$> (flip (Bin max) <$> traverse f r <*> traverse f l)
         | otherwise = IntMap . NonEmpty min <$> (Bin max <$> traverse f l <*> traverse f r)
-
+-}
 instance Monoid (IntMap a) where
     mempty = IntMap mempty
     mappend (IntMap m1) (IntMap m2) = IntMap (mappend m1 m2)
--}
+
 instance NFData a => NFData (IntMap a) where
     rnf (IntMap m) = rnf m
 
@@ -144,7 +144,7 @@ update f k (IntMap m) = IntMap (W.update f (fromIntegral k) m)
 updateWithKey :: (Key -> a -> Maybe a) -> Key -> IntMap a -> IntMap a
 updateWithKey f k (IntMap m) = IntMap (W.updateWithKey f' (fromIntegral k) m) where
     f' = f . fromIntegral
-{-
+
 union :: IntMap a -> IntMap a -> IntMap a
 union (IntMap m1) (IntMap m2) = IntMap (W.union m1 m2)
 
@@ -172,25 +172,11 @@ mapWithKey :: (Key -> a -> b) -> IntMap a -> IntMap b
 mapWithKey f (IntMap m) = IntMap (W.mapWithKey f' m) where
     f' = f . fromIntegral
 
-toList :: IntMap a -> [(Int, a)]
-toList (IntMap Empty) = []
-toList (IntMap (NonEmpty min (Tip x))) = [(fromIntegral min, x)]
-toList m@(IntMap (NonEmpty min (Bin max l r)))
-    | fromIntegral (xor min max) < (0 :: Int) = goR max r . goL min l $ []
-    | otherwise = goL min l . goR max r $ []
-  where
-    goL min (Tip x) = ((fromIntegral min, x):)
-    goL min (Bin max l r) = goL min l . goR max r
-    
-    goR max (Tip x) = ((fromIntegral max, x):)
-    goR max (Bin min l r) = goL min l . goR max r
--}
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . fmap (\(k, v) -> (fromIntegral k, v))
 
 showTree :: Show a => IntMap a -> String
 showTree (IntMap m) = W.showTree m
-{-
+
 valid :: IntMap a -> Bool
 valid (IntMap m) = W.valid m
--}
