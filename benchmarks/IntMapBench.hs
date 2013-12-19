@@ -21,46 +21,52 @@ main = do
     evaluate $ rnf sparseW
     evaluate $ rnf sElemsSearch
     defaultMain
-        [ bgroup "present"
-            [ bgroup "lookup"
+        [ bgroup "lookup"
+            [ bgroup "present"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 keys) denseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 keys) denseW
                 ]
-            , bgroup "member"
-                [ bench "IntMap"  $ whnf (\m -> foldl' (\n x -> if M.member x m then n + 1 else n) 0 keys) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 keys) denseW
-                ]
-            , bgroup "insert"
-                [ bench "IntMap"  $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m elems) denseW
-                ]
-            , bgroup "delete"
-                [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m keys) denseW
-                ]
-            , bgroup "update"
-                [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m keys) denseM
-                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m keys) denseW
-                ]
-            ]
-        , bgroup "absent"
-            [ bgroup "lookup"
+            , bgroup "absent"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n k -> fromMaybe n (M.lookup k m)) 0 sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\n k -> fromMaybe n (W.lookup k m)) 0 sKeysSearch) sparseW
                 ]
-            , bgroup "member"
+            ]
+        , bgroup "member"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\n x -> if M.member x m then n + 1 else n) 0 keys) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 keys) denseW
+                ]
+            , bgroup "absent"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\n x -> if M.member x m then n + 1 else n) 0 sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 sKeysSearch) sparseW
                 ]
-            , bgroup "insert"
+            ]
+        , bgroup "insert"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m elems) denseW
+                ]
+            , bgroup "absent"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m sElemsSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m sElemsSearch) sparseW
                 ]
-            , bgroup "delete"
+            ]
+        , bgroup "delete"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m keys) denseW
+                ]
+            , bgroup "absent"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m sKeysSearch) sparseW
                 ]
-            , bgroup "update"
+            ]
+        , bgroup "update"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m keys) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m keys) denseW
+                ]
+            , bgroup "absent"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m sKeysSearch) sparseW
                 ]
