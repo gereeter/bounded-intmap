@@ -25,6 +25,10 @@ properties = testGroup "Properties"
     , testProperty "lookup/alter" $ \(Fun _ f) k m -> lookup k (alter f k (m :: WordMap Int)) == f (lookup k m)
     , testProperty "insertLookupWithKey spec" $ \(Fun _ f) k v m -> insertLookupWithKey (curry3 f) k v (m :: WordMap Int) == (lookup k m, insertWithKey (curry3 f) k v m)
     , testProperty "updateLookupWithKey spec" $ \(Fun _ f) k m -> updateLookupWithKey (curry f) k (m :: WordMap Int) == (lookup k m, updateWithKey (curry f) k m)
+    , testGroup "Union"
+        [ testProperty "Associativity" $ \m1 m2 m3 -> union (union m1 m2) (m3 :: WordMap Int) == union m1 (union m2 m3)
+        , testProperty "Commutativity" $ \(Fun _ f) m1 m2 -> unionWithKey (curry3 f) (m1 :: WordMap Int) m2 == unionWithKey (\k v1 v2 -> curry3 f k v2 v1) m2 m1
+        ]
     ]
 
 unitTests :: TestTree
