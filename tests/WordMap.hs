@@ -29,6 +29,10 @@ properties = testGroup "Properties"
         [ testProperty "Associativity" $ \m1 m2 m3 -> union (union m1 m2) (m3 :: WordMap Int) == union m1 (union m2 m3)
         , testProperty "Commutativity" $ \(Fun _ f) m1 m2 -> unionWithKey (curry3 f) (m1 :: WordMap Int) m2 == unionWithKey (\k v1 v2 -> curry3 f k v2 v1) m2 m1
         ]
+    , testGroup "Intersection"
+        [ testProperty "Associativity" $ \m1 m2 m3 -> intersection (intersection (m1 :: WordMap Int) (m2 :: WordMap Int)) (m3 :: WordMap Int) == intersection m1 (intersection m2 m3)
+        , testProperty "Commutativity" $ \(Fun _ f) m1 m2 -> intersectionWithKey (curry3 f) (m1 :: WordMap Int) (m2 :: WordMap Int) == intersectionWithKey (\k v1 v2 -> curry3 f k v2 v1 :: Int) m2 m1
+        ]
     ]
 
 unitTests :: TestTree
