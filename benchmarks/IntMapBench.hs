@@ -17,11 +17,11 @@ main = do
         sparseW = W.fromList sElems :: W.IntMap Int
         sparseM' = M.fromAscList sElemsSearch :: M.IntMap Int
         sparseW' = W.fromList sElemsSearch :: W.IntMap Int
-    evaluate $ rnf denseM
-    evaluate $ rnf denseW
-    evaluate $ rnf sparseM
-    evaluate $ rnf sparseW
-    evaluate $ rnf sElemsSearch
+    evaluate $ rnf [denseM, sparseM, sparseM']
+    evaluate $ rnf [denseW, sparseW, sparseW']
+    evaluate $ rnf [elems,  sElems,  sElemsSearch]
+    evaluate $ rnf [keys,   sKeys,   sKeysSearch]
+    evaluate $ rnf [values, sValues]
     defaultMain
         [ bgroup "lookup"
             [ bgroup "present"
