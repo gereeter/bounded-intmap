@@ -15,6 +15,8 @@ main = do
         denseW = W.fromList elems :: W.IntMap Int
         sparseM = M.fromAscList sElems :: M.IntMap Int
         sparseW = W.fromList sElems :: W.IntMap Int
+        sparseM' = M.fromAscList sElemsSearch :: M.IntMap Int
+        sparseW' = W.fromList sElemsSearch :: W.IntMap Int
     evaluate $ rnf denseM
     evaluate $ rnf denseW
     evaluate $ rnf sparseM
@@ -69,6 +71,16 @@ main = do
             , bgroup "absent"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.update Just k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m sKeysSearch) sparseW
+                ]
+            ]
+        , bgroup "unionWithKey"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (denseM, sparseM)
+                , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseM, sparseM')
+                , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
         ]
