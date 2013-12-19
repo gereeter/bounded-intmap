@@ -827,7 +827,178 @@ unionWith f = unionWithKey (const f)
 -- > let f key left_value right_value = (show key) ++ ":" ++ left_value ++ "|" ++ right_value
 -- > unionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == fromList [(3, "b"), (5, "5:a|A"), (7, "C")]
 unionWithKey :: (Key -> a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
-unionWithKey combine m1 m2 = foldrWithKey (insertWithKey combine) m2 m1
+unionWithKey combine = start
+  where
+    start Empty m2 = m2
+    start m1 Empty = m1
+    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
+        | min1 < min2 = NonEmpty min1 minV1 (goL2 minV2 min1 root1 min2 root2)
+        | min1 > min2 = NonEmpty min2 minV2 (goL1 minV1 min1 root1 min2 root2)
+        | otherwise = NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 root1 root2) -- we choose min1 arbitrarily, as min1 == min2
+    
+    -- TODO: Should I bind 'minV1' in a closure? It never changes.
+    -- TODO: Should I cache @xor min1 min2@?
+    goL1 minV1 min1 Tip !_   Tip = Bin min1 minV1 Tip Tip
+    goL1 minV1 min1 Tip min2 n2  = goInsertL1 min1 minV1 (xor min1 min2) min2 n2
+    goL1 minV1 min1 n1  min2 Tip = endL (xor min1 min2) min1 minV1 n1 -- FIXME: Is this right?
+    goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+         LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | xor min2 min1 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
+            | max1 > max2 -> Bin max1 maxV1 l2 (goR2 maxV2 max1 (Bin min1 minV1 l1 r1) max2 r2)
+            | max1 < max2 -> Bin max2 maxV2 l2 (goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2)
+            | otherwise -> Bin max1 (combine max1 maxV1 maxV2) l2 (goRFused max1 (Bin min1 minV1 l1 r1) r2) -- we choose max1 arbitrarily, as max1 == max2
+         EQ | max2 < min1 -> disjoint
+            | max1 > max2 -> Bin max1 maxV1 (goL1 minV1 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
+            | max1 < max2 -> Bin max2 maxV2 (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+            | otherwise -> Bin max1 (combine max1 maxV1 maxV2) (goL1 minV1 min1 l1 min2 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+         GT | xor min1 max1 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | otherwise -> Bin max1 maxV1 (goL1 minV1 min1 l1 min2 n2) r1
+       where
+         disjoint = Bin max1 maxV1 n2 (Bin min1 minV1 l1 r1)
+    
+    -- TODO: Should I bind 'minV2' in a closure? It never changes.
+    -- TODO: Should I cache @xor min1 min2@?
+    goL2 minV2 !_   Tip min2 Tip = Bin min2 minV2 Tip Tip
+    goL2 minV2 min1 Tip min2 n2  = endL (xor min1 min2) min2 minV2 n2 -- FIXME: Is this right?
+    goL2 minV2 min1 n1  min2 Tip = goInsertL2 min2 minV2 (xor min1 min2) min1 n1
+    goL2 minV2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+         LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | otherwise -> Bin max2 maxV2 (goL2 minV2 min1 n1 min2 l2) r2
+         EQ | max1 < min2 -> disjoint
+            | max1 > max2 -> Bin max1 maxV1 (goL2 minV2 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
+            | max1 < max2 -> Bin max2 maxV2 (goL2 minV2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+            | otherwise -> Bin max1 (combine max1 maxV1 maxV2) (goL2 minV2 min1 l1 min2 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+         GT | xor min1 max1 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | xor min1 min2 < xor min2 max1 -> Bin max1 maxV1 (goL2 minV2 min1 l1 min2 n2) r1 -- we choose min2 arbitrarily - we just need something from tree 2
+            | max1 > max2 -> Bin max1 maxV1 l1 (goR2 maxV2 max1 r1 max2 (Bin min2 minV2 l2 r2))
+            | max1 < max2 -> Bin max2 maxV2 l1 (goR1 maxV1 max1 r1 max2 (Bin min2 minV2 l2 r2))
+            | otherwise -> Bin max1 (combine max1 maxV1 maxV2) l1 (goRFused max1 r1 (Bin min2 minV2 l2 r2)) -- we choose max1 arbitrarily, as max1 == max2
+       where
+         disjoint = Bin max2 maxV2 n1 (Bin min2 minV2 l2 r2)
+    
+    -- TODO: Should I bind 'min' in a closure? It never changes.
+    -- TODO: Should I use an xor cache here?
+    -- 'goLFused' is called instead of 'goL' if the minimums of the two trees are the same
+    -- Note that because of this property, the trees cannot be disjoint, so we can skip most of the checks in 'goL'
+    goLFused !_ Tip n2 = n2
+    goLFused !_ n1 Tip = n1
+    goLFused min n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min max1) (xor min max2) of
+        LT -> Bin max2 maxV2 (goLFused min n1 l2) r2
+        EQ | max1 > max2 -> Bin max1 maxV1 (goLFused min l1 l2) (goR2 maxV2 max1 r1 max2 r2)
+           | max1 < max2 -> Bin max2 maxV2 (goLFused min l1 l2) (goR1 maxV1 max1 r1 max2 r2)
+           | otherwise -> Bin max1 (combine max1 maxV1 maxV2) (goLFused min l1 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+        GT -> Bin max1 maxV1 (goLFused min l1 n2) r1
+    
+    -- TODO: Should I bind 'maxV1' in a closure? It never changes.
+    -- TODO: Should I cache @xor max1 max2@?
+    goR1 maxV1 max1 Tip !_   Tip = Bin max1 maxV1 Tip Tip
+    goR1 maxV1 max1 Tip max2 n2  = goInsertR1 max1 maxV1 (xor max1 max2) max2 n2
+    goR1 maxV1 max1 n1  max2 Tip = endR (xor max1 max2) max1 maxV1 n1 -- FIXME: Is this right?
+    goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+         LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | xor min2 max1 > xor max1 max2 -> Bin min2 minV2 l2 (goR1 maxV1 max1 n1 max2 r2) -- we choose max1 arbitrarily - we just need something from tree 1
+            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 (Bin max1 maxV1 l1 r1) min2 l2) r2
+            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2) r2
+            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 (Bin max1 maxV1 l1 r1) l2) r2 -- we choose min1 arbitrarily, as min1 == min2
+         EQ | max1 < min2 -> disjoint
+            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (goR1 maxV1 max1 r1 max2 r2) -- we choose min1 arbitrarily, as min1 == min2
+         GT | xor min1 max1 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | otherwise -> Bin min1 minV1 l1 (goR1 maxV1 max1 r1 max2 n2)
+       where
+         disjoint = Bin min1 minV1 (Bin max1 maxV1 l1 r1) n2
+    
+    -- TODO: Should I bind 'minV2' in a closure? It never changes.
+    -- TODO: Should I cache @xor min1 min2@?
+    goR2 maxV2 !_   Tip max2   Tip = Bin max2 maxV2 Tip Tip
+    goR2 maxV2 max1 Tip max2 n2  = endR (xor max1 max2) max2 maxV2 n2 -- FIXME: Is this right?
+    goR2 maxV2 max1 n1  max2 Tip = goInsertR2 max2 maxV2 (xor max1 max2) max1 n1
+    goR2 maxV2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+         LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | otherwise -> Bin min2 minV2 l2 (goR2 maxV2 max1 n1 max2 r2)
+         EQ | max2 < min1 -> disjoint
+            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
+            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
+            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (goR2 maxV2 max1 r1 max2 r2) -- we choose min1 arbitrarily, as min1 == min2
+         GT | xor min1 max1 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
+            | xor min1 max2 > xor max2 max1 -> Bin min1 minV1 l1 (goR2 maxV2 max1 r1 max2 n2) -- we choose max2 arbitrarily - we just need something from tree 2
+            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 (Bin min2 minV2 l2 r2)) r1
+            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 (Bin min2 minV2 l2 r2)) r1
+            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 (Bin min2 minV2 l2 r2)) r1 -- we choose min1 arbitrarily, as min1 == min2
+       where
+         disjoint = Bin min2 minV2 (Bin max2 maxV2 l2 r2) n1
+    
+    -- TODO: Should I bind 'max' in a closure? It never changes.
+    -- TODO: Should I use an xor cache here?
+    -- 'goRFused' is called instead of 'goR' if the minimums of the two trees are the same
+    -- Note that because of this property, the trees cannot be disjoint, so we can skip most of the checks in 'goR'
+    goRFused !_ Tip n2 = n2
+    goRFused !_ n1 Tip = n1
+    goRFused max n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
+        LT -> Bin min2 minV2 l2 (goRFused max n1 r2)
+        EQ | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 l2) (goRFused max r1 r2)
+           | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 l2) (goRFused max r1 r2)
+           | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (goRFused max r1 r2) -- we choose min1 arbitrarily, as min1 == min2
+        GT -> Bin min1 minV1 l1 (goRFused max r1 n2)
+    
+    goInsertL1 k v !_        _    Tip = Bin k v Tip Tip
+    goInsertL1 k v !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goInsertL1 k v xorCache min l) r
+                    else Bin max maxV l (goInsertR1 k v xorCacheMax max r)
+        | k > max = if xor min max < xorCacheMax
+                    then Bin k v (Bin max maxV l r) Tip
+                    else Bin k v l (endR xorCacheMax max maxV r)
+        | otherwise = Bin max (combine k v maxV) l r
+      where xorCacheMax = xor k max
+
+    goInsertR1 k v !_        _    Tip = Bin k v Tip Tip
+    goInsertR1 k v !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goInsertR1 k v xorCache max r)
+                    else Bin min minV (goInsertL1 k v xorCacheMin min l) r
+        | k < min = if xor min max < xorCacheMin
+                    then Bin k v Tip (Bin min minV l r)
+                    else Bin k v (endL xorCacheMin min minV l) r
+        | otherwise = Bin min (combine k v minV) l r
+      where xorCacheMin = xor min k
+    
+    goInsertL2 k v !_        _    Tip = Bin k v Tip Tip
+    goInsertL2 k v !xorCache min (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goInsertL2 k v xorCache min l) r
+                    else Bin max maxV l (goInsertR2 k v xorCacheMax max r)
+        | k > max = if xor min max < xorCacheMax
+                    then Bin k v (Bin max maxV l r) Tip
+                    else Bin k v l (endR xorCacheMax max maxV r)
+        | otherwise = Bin max (combine k maxV v) l r
+      where xorCacheMax = xor k max
+
+    goInsertR2 k v !_        _    Tip = Bin k v Tip Tip
+    goInsertR2 k v !xorCache max (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goInsertR2 k v xorCache max r)
+                    else Bin min minV (goInsertL2 k v xorCacheMin min l) r
+        | k < min = if xor min max < xorCacheMin
+                    then Bin k v Tip (Bin min minV l r)
+                    else Bin k v (endL xorCacheMin min minV l) r
+        | otherwise = Bin min (combine k minV v) l r
+      where xorCacheMin = xor min k
+    
+    endL !xorCache min minV = finishL
+      where
+        finishL Tip = Bin min minV Tip Tip
+        finishL (Bin max maxV l r)
+            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
+            | otherwise = Bin max maxV (finishL l) r
+
+    endR !xorCache max maxV = finishR
+      where
+        finishR Tip = Bin max maxV Tip Tip
+        finishR (Bin min minV l r)
+            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
+            | otherwise = Bin min minV l (finishR r)
 
 -- | The union of a list of maps.
 --
@@ -1523,7 +1694,7 @@ valid = start
     
     allKeys _ Tip = True
     allKeys p (Bin b _ l r) = p b && allKeys p l && allKeys p r
-{-
+
 -- | /O(1)/. Returns whether the most significant bit of its first
 -- argument is less significant than the most significant bit of its
 -- second argument.
@@ -1531,12 +1702,13 @@ valid = start
 ltMSB :: Word -> Word -> Bool
 ltMSB x y = x < y && x < xor x y
 
+{-# INLINE compareMSB #-}
 compareMSB :: Word -> Word -> Ordering
 compareMSB x y = case compare x y of
     LT | x < xor x y -> LT
     GT | y < xor x y -> GT
     _ -> EQ
--}
+
 {-# INLINE binL #-}
 binL :: WordMap a -> WordMap a -> WordMap a
 binL Empty r = flipBounds r

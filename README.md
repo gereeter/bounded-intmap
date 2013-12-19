@@ -239,7 +239,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 #### Union
 * `union`. Delegated, using `unionWith`.
 * `unionWith`. Delegated, using `unionWithKey`.
-* `unionWithKey`. Delegated, using `foldrWithKey` and lots of `insertWithKey`s.
+* `unionWithKey`. Raw.
 * `unions`. Delegated, using lots of `union`s.
 * `unionsWith`. Delegated, using lots of `unionWith`s.
 
