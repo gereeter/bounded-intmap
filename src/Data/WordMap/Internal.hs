@@ -923,9 +923,9 @@ unionWithKey combine = start
             | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 l2) (goR2 maxV2 max1 r1 max2 r2) -- we choose min1 arbitrarily, as min1 == min2
          GT | xor min1 max1 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min1 max2 > xor max2 max1 -> Bin min1 minV1 l1 (goR2 maxV2 max1 r1 max2 n2) -- we choose max2 arbitrarily - we just need something from tree 2
-            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 (Bin min2 minV2 l2 r2)) r1
-            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 (Bin min2 minV2 l2 r2)) r1
-            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 (Bin min2 minV2 l2 r2)) r1 -- we choose min1 arbitrarily, as min1 == min2
+            | min1 < min2 -> Bin min1 minV1 (goL2 minV2 min1 l1 min2 (Bin max2 maxV2 l2 r2)) r1
+            | min1 > min2 -> Bin min2 minV2 (goL1 minV1 min1 l1 min2 (Bin max2 maxV2 l2 r2)) r1
+            | otherwise -> Bin min1 (combine min1 minV1 minV2) (goLFused min1 l1 (Bin max2 maxV2 l2 r2)) r1 -- we choose min1 arbitrarily, as min1 == min2
        where
          disjoint = Bin min2 minV2 (Bin max2 maxV2 l2 r2) n1
     
