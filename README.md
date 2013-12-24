@@ -311,8 +311,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `mapMaybeWithKey`. Raw.
 * `mapEither`. _Unimplemented_.
 * `mapEitherWithKey`. _Unimplemented_.
-* `split`. _Unimplemented_.
-* `splitLookup`. _Unimplemented_.
+* `split`. Delegated, using `splitLookup`.
+* `splitLookup`. Raw.
 
 ### Submap
 * `isSubmapOf`. _Unimplemented_.
