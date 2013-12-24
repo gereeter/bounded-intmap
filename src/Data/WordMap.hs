@@ -97,6 +97,7 @@ module Data.WordMap (
     , partitionWithKey-}
     , mapMaybe
     , mapMaybeWithKey
+    , split
     , splitLookup
     
     -- * Debugging

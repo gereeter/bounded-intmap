@@ -1664,6 +1664,9 @@ mapMaybeWithKey f = start
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV' (goL l) r')
         Nothing -> binR (goDeleteL l) (goDeleteR r)
 
+split :: Key -> WordMap a -> (WordMap a, WordMap a)
+split k m = case splitLookup k m of
+    (lt, _, gt) -> (lt, gt)
 
 splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
 splitLookup k = k `seq` start
