@@ -34,6 +34,9 @@ properties = testGroup "Properties"
         , testProperty "Commutativity" $ \(Fun _ f) m1 m2 -> intersectionWithKey (curry3 f) (m1 :: WordMap Int) (m2 :: WordMap Int) == intersectionWithKey (\k v1 v2 -> curry3 f k v2 v1 :: Int) m2 m1
         , testProperty "Specification" $ \(Fun _ f) m1 m2 -> intersectionWithKey (curry3 f) (m1 :: WordMap Int) (m2 :: WordMap Int) == (mapMaybeWithKey (\k v -> fmap (curry3 f k v) (lookup k m2)) m1 :: WordMap Int)
         ]
+    , testGroup "Split"
+        [ testProperty "Specification" $ \k m -> splitLookup k (m :: WordMap Int) == (filterWithKey (\k' _ -> k' < k) m, lookup k m, filterWithKey (\k' _ -> k' > k) m)
+        ]
     ]
 
 unitTests :: TestTree

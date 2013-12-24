@@ -1664,27 +1664,55 @@ mapMaybeWithKey f = start
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV' (goL l) r')
         Nothing -> binR (goDeleteL l) (goDeleteR r)
 
-{-
+
 splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
 splitLookup k = k `seq` start
   where
     start Empty = (Empty, Nothing, Empty)
-    start (NonEmpty min root)
-        | k < min = (Empty, Nothing, NonEmpty min root)
-        | otherwise = goL (xor min k) min root
+    start m@(NonEmpty min minV root)
+        | k > min = case root of
+            Tip -> (m, Nothing, Empty)
+            Bin max maxV l r | k < max -> let (DR glb glbV lt, eq, DR lub lubV gt) = go (xor min k) min minV (xor k max) max maxV l r
+                                          in (flipBounds (NonEmpty glb glbV lt), eq, NonEmpty lub lubV gt)
+                             | k > max -> (m, Nothing, Empty)
+                             | otherwise -> let DR max' maxV' root' = goDeleteMax min minV l r
+                                            in (flipBounds (NonEmpty max' maxV' root'), Just maxV, Empty)
+                                
+        | k < min = (Empty, Nothing, m)
+        | otherwise = case root of
+            Tip -> (Empty, Just minV, Empty)
+            Bin max maxV l r -> let DR min' minV' root' = goDeleteMin max maxV l r
+                                in (Empty, Just minV, NonEmpty min' minV' root')
     
-    goL !xorCache min (Tip x)
-        | k == min = (Empty, Just x, Empty)
-        | otherwise = (NonEmpty min (Tip x), Nothing, Empty)
-    goL !xorCache min n@(Bin max l r)
-        | k > max = (NonEmpty min n, Nothing, Empty)
-        | xorCache < xorCacheMax = let (ll, lv, lr) = goL xorCache min l
-                                   in  (ll, lv, Bin max lr r)
-        | otherwise              = let (rl, rv, rr) = goR xorCacheMax max r
-                                   in  (Bin max l rl, rv, rr)
-      where
-        xorCacheMax = xor k max
--}
+    go xorCacheMin min minV xorCacheMax max maxV l r
+        | xorCacheMin < xorCacheMax = case l of
+            Tip -> (DR min minV Tip, Nothing, flipBoundsDR (DR max maxV r))
+            Bin maxI maxVI lI rI
+                | k < maxI -> let (lt, eq, DR minI minVI gt) = go xorCacheMin min minV (xor k maxI) maxI maxVI lI rI
+                              in (lt, eq, DR minI minVI (Bin max maxV gt r))
+                | k > maxI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
+                | otherwise -> (goDeleteMax min minV lI rI, Just maxVI, flipBoundsDR (DR max maxV r))
+        | otherwise = case r of
+            Tip -> (flipBoundsDR (DR min minV l), Nothing, DR max maxV Tip)
+            Bin minI minVI lI rI
+                | k > minI -> let (DR maxI maxVI lt, eq, gt) = go (xor minI k) minI minVI xorCacheMax max maxV lI rI
+                              in (DR maxI maxVI (Bin min minV l lt), eq, gt)
+                | k < minI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
+                | otherwise -> (flipBoundsDR (DR min minV l), Just minVI, goDeleteMin max maxV lI rI)
+    
+    goDeleteMin max maxV l r = case l of
+        Tip -> case r of
+            Tip -> DR max maxV r
+            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
+        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
+                                in  DR min minV (Bin max maxV l' r)
+    
+    goDeleteMax min minV l r = case r of
+        Tip -> case l of
+            Tip -> DR min minV l
+            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
+        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
+                                in  DR max maxV (Bin min minV l r')
 
 -- | /O(1)/. The minimal key of the map.
 findMin :: WordMap a -> (Key, a)
@@ -1861,3 +1889,8 @@ flipBounds :: WordMap a -> WordMap a
 flipBounds Empty = Empty
 flipBounds n@(NonEmpty _ _ Tip) = n
 flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
+
+{-# INLINE flipBoundsDR #-}
+flipBoundsDR :: DeleteResult a -> DeleteResult a
+flipBoundsDR n@(DR _ _ Tip) = n
+flipBoundsDR (DR b1 v1 (Bin b2 v2 l r)) = DR b2 v2 (Bin b1 v1 l r)
