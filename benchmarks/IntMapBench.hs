@@ -73,6 +73,16 @@ main = do
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.update Just k m) m sKeysSearch) sparseW
                 ]
             ]
+        , bgroup "union"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (uncurry M.union) (denseM, sparseM)
+                , bench "WordMap" $ whnf (uncurry W.union) (denseW, sparseW)
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (uncurry M.union) (sparseM, sparseM')
+                , bench "WordMap" $ whnf (uncurry W.union) (sparseW, sparseW')
+                ]
+            ]
         , bgroup "unionWithKey"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (denseM, sparseM)
@@ -81,6 +91,16 @@ main = do
             , bgroup "absent"
                 [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseM, sparseM')
                 , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
+                ]
+            ]
+        , bgroup "intersection"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (uncurry M.intersection) (denseM, sparseM)
+                , bench "WordMap" $ whnf (uncurry W.intersection) (denseW, sparseW)
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (uncurry M.intersection) (sparseM, sparseM')
+                , bench "WordMap" $ whnf (uncurry W.intersection) (sparseW, sparseW')
                 ]
             ]
         , bgroup "intersectionWithKey"

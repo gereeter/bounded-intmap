@@ -1,7 +1,7 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only two functions in the benchmark, `insert` and `intersectionWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only three functions in the benchmark, `insert`, `intersection`, and `intersectionWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
 
 I deviate from the original implementation in a couple of ways:
 
@@ -237,7 +237,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 
 ### Combine
 #### Union
-* `union`. Delegated, using `unionWith`.
+* `union`. Raw.
 * `unionWith`. Delegated, using `unionWithKey`.
 * `unionWithKey`. Raw.
 * `unions`. Delegated, using lots of `union`s.
@@ -249,7 +249,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `differenceWithKey`. Delegated, using `foldrWithKey'` and lots of `update`s.
 
 #### Intersection
-* `intersection`. Delegated, using `intersectionWith`.
+* `intersection`. Raw. See note on `intersectionWithKey`.
 * `intersectionWith`. Delegated, using `intersectionWithKey`.
 * `intersectionWithKey`. Raw. Note that it is still slower than stock `Data.IntMap` by up to (though not necessarily) 50%.
 
