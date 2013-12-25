@@ -6,12 +6,14 @@
 
 module Data.WordMap.Internal where
 
-import Control.DeepSeq
-import Control.Applicative hiding (empty)
+import Control.DeepSeq (NFData(..))
+import Control.Applicative (Applicative(..))
 
-import Data.Monoid
+import Data.Monoid (Monoid(..))
 import qualified Data.Foldable (Foldable(..))
-import Data.Traversable
+import Data.Traversable (Traversable(..))
+
+import Data.Functor ((<$>))
 
 import Data.Word (Word)
 import Data.Bits (xor)
@@ -104,8 +106,6 @@ bounds :: WordMap a -> Maybe (Key, Key)
 bounds Empty = Nothing
 bounds (NonEmpty min _ Tip) = Just (min, min)
 bounds (NonEmpty min _ (Bin max _ _ _)) = Just (min, max)
-
--- TODO: Is there a good way to unify the 'lookup'-like functions?
 
 -- | /O(min(n,W))/. Is the key a member of the map?
 member :: Key -> WordMap a -> Bool
@@ -820,8 +820,6 @@ union = unionWith const
 unionWith :: (a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
 unionWith f = unionWithKey (const f)
 
--- TODO: Actually implement union properly.
-
 -- | /O(n+m)/. The union with a combining function.
 --
 -- > let f key left_value right_value = (show key) ++ ":" ++ left_value ++ "|" ++ right_value
@@ -840,7 +838,7 @@ unionWithKey combine = start
     -- TODO: Should I cache @xor min1 min2@?
     goL1 minV1 min1 Tip !_   Tip = Bin min1 minV1 Tip Tip
     goL1 minV1 min1 Tip min2 n2  = goInsertL1 min1 minV1 (xor min1 min2) min2 n2
-    goL1 minV1 min1 n1  min2 Tip = endL (xor min1 min2) min1 minV1 n1 -- FIXME: Is this right?
+    goL1 minV1 min1 n1  min2 Tip = endL (xor min1 min2) min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 min1 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
@@ -859,7 +857,7 @@ unionWithKey combine = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goL2 minV2 !_   Tip min2 Tip = Bin min2 minV2 Tip Tip
-    goL2 minV2 min1 Tip min2 n2  = endL (xor min1 min2) min2 minV2 n2 -- FIXME: Is this right?
+    goL2 minV2 min1 Tip min2 n2  = endL (xor min1 min2) min2 minV2 n2
     goL2 minV2 min1 n1  min2 Tip = goInsertL2 min2 minV2 (xor min1 min2) min1 n1
     goL2 minV2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -893,7 +891,7 @@ unionWithKey combine = start
     -- TODO: Should I cache @xor max1 max2@?
     goR1 maxV1 max1 Tip !_   Tip = Bin max1 maxV1 Tip Tip
     goR1 maxV1 max1 Tip max2 n2  = goInsertR1 max1 maxV1 (xor max1 max2) max2 n2
-    goR1 maxV1 max1 n1  max2 Tip = endR (xor max1 max2) max1 maxV1 n1 -- FIXME: Is this right?
+    goR1 maxV1 max1 n1  max2 Tip = endR (xor max1 max2) max1 maxV1 n1
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 max1 > xor max1 max2 -> Bin min2 minV2 l2 (goR1 maxV1 max1 n1 max2 r2) -- we choose max1 arbitrarily - we just need something from tree 1
@@ -912,7 +910,7 @@ unionWithKey combine = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goR2 maxV2 !_   Tip max2   Tip = Bin max2 maxV2 Tip Tip
-    goR2 maxV2 max1 Tip max2 n2  = endR (xor max1 max2) max2 maxV2 n2 -- FIXME: Is this right?
+    goR2 maxV2 max1 Tip max2 n2  = endR (xor max1 max2) max2 maxV2 n2
     goR2 maxV2 max1 n1  max2 Tip = goInsertR2 max2 maxV2 (xor max1 max2) max1 n1
     goR2 maxV2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -1052,8 +1050,6 @@ intersection = intersectionWith const
 -- > intersectionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "aA"
 intersectionWith :: (a -> b -> c) -> WordMap a -> WordMap b -> WordMap c
 intersectionWith f = intersectionWithKey (const f)
-
--- TODO: Actually implement intersection properly.
 
 -- | /O(n+m)/. The intersection with a combining function.
 --
