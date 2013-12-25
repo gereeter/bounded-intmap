@@ -1804,10 +1804,27 @@ mapEitherWithKey func = start
                        SP tr fr = goFalseR r
                    in SP (binR tl tr) (Bin min v fl fr)
 
+-- | /O(min(n,W))/. The expression (@'split' k map@) is a pair @(map1,map2)@
+-- where all keys in @map1@ are lower than @k@ and all keys in
+-- @map2@ larger than @k@. Any key equal to @k@ is found in neither @map1@ nor @map2@.
+--
+-- > split 2 (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3,"b"), (5,"a")])
+-- > split 3 (fromList [(5,"a"), (3,"b")]) == (empty, singleton 5 "a")
+-- > split 4 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", singleton 5 "a")
+-- > split 5 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", empty)
+-- > split 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], empty)
 split :: Key -> WordMap a -> (WordMap a, WordMap a)
 split k m = case splitLookup k m of
     (lt, _, gt) -> (lt, gt)
 
+-- | /O(min(n,W))/. Performs a 'split' but also returns whether the pivot
+-- key was found in the original map.
+--
+-- > splitLookup 2 (fromList [(5,"a"), (3,"b")]) == (empty, Nothing, fromList [(3,"b"), (5,"a")])
+-- > splitLookup 3 (fromList [(5,"a"), (3,"b")]) == (empty, Just "b", singleton 5 "a")
+-- > splitLookup 4 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", Nothing, singleton 5 "a")
+-- > splitLookup 5 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", Just "a", empty)
+-- > splitLookup 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], Nothing, empty)
 splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
 splitLookup k = k `seq` start
   where
