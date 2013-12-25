@@ -97,6 +97,8 @@ module Data.WordMap (
     , partitionWithKey
     , mapMaybe
     , mapMaybeWithKey
+    , mapEither
+    , mapEitherWithKey
     , split
     , splitLookup
     

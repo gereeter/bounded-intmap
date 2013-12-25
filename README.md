@@ -309,8 +309,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `partitionWithKey`. Raw.
 * `mapMaybe`. Delegated, using `mapMaybeWithKey`.
 * `mapMaybeWithKey`. Raw.
-* `mapEither`. _Unimplemented_.
-* `mapEitherWithKey`. _Unimplemented_.
+* `mapEither`. Delegated, using `mapEitherWithKey`.
+* `mapEitherWithKey`. Raw.
 * `split`. Delegated, using `splitLookup`.
 * `splitLookup`. Raw.
 
