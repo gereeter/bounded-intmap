@@ -1536,7 +1536,22 @@ toList = toAscList
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
-fromList = Data.Foldable.foldr (uncurry insert) empty
+fromList = Data.Foldable.foldl' (\t (k, a) -> insert k a t) empty
+
+-- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs with a combining function. See also 'fromAscListWith'.
+--
+-- > fromListWith (++) [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"c")] == fromList [(3, "ab"), (5, "cba")]
+-- > fromListWith (++) [] == empty
+fromListWith :: (a -> a -> a) -> [(Key, a)] -> WordMap a
+fromListWith f = Data.Foldable.foldl' (\t (k, a) -> insertWith f k a t) empty
+
+-- | /O(n*min(n,W))/. Build a map from a list of key\/value pairs with a combining function. See also fromAscListWithKey'.
+--
+-- > let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+-- > fromListWithKey f [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"c")] == fromList [(3, "3:a|b"), (5, "5:c|5:b|a")]
+-- > fromListWithKey f [] == empty
+fromListWithKey :: (Key -> a -> a -> a) -> [(Key, a)] -> WordMap a
+fromListWithKey f = Data.Foldable.foldl' (\t (k, a) -> insertWithKey f k a t) empty
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs where the
 -- keys are in ascending order. Subject to list fusion.
@@ -1551,6 +1566,41 @@ toAscList = foldrWithKey (\k v l -> (k, v) : l) []
 -- > toDescList (fromList [(5,"a"), (3,"b")]) == [(5,"a"), (3,"b")]
 toDescList :: WordMap a -> [(Key, a)]
 toDescList = foldlWithKey (\l k v -> (k, v) : l) []
+
+-- TODO: Use the ordering
+
+-- | /O(n)/. Build a map from a list of key\/value pairs where
+-- the keys are in ascending order.
+--
+-- > fromAscList [(3,"b"), (5,"a")]          == fromList [(3, "b"), (5, "a")]
+-- > fromAscList [(3,"b"), (5,"a"), (5,"b")] == fromList [(3, "b"), (5, "b")]
+fromAscList :: [(Key, a)] -> WordMap a
+fromAscList = fromList
+
+-- | /O(n)/. Build a map from a list of key\/value pairs where
+-- the keys are in ascending order.
+--
+-- > fromAscList [(3,"b"), (5,"a")]          == fromList [(3, "b"), (5, "a")]
+-- > fromAscList [(3,"b"), (5,"a"), (5,"b")] == fromList [(3, "b"), (5, "b")]
+fromAscListWith :: (a -> a -> a) -> [(Key, a)] -> WordMap a
+fromAscListWith = fromListWith
+
+-- | /O(n)/. Build a map from a list of key\/value pairs where
+-- the keys are in ascending order, with a combining function on equal keys.
+-- /The precondition (input list is ascending) is not checked./
+--
+-- > let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+-- > fromAscListWithKey f [(3,"b"), (5,"a"), (5,"b")] == fromList [(3, "b"), (5, "5:b|a")]
+fromAscListWithKey :: (Key -> a -> a -> a) -> [(Key, a)] -> WordMap a
+fromAscListWithKey = fromListWithKey
+
+-- | /O(n)/. Build a map from a list of key\/value pairs where
+-- the keys are in ascending order and all distinct.
+-- /The precondition (input list is strictly ascending) is not checked./
+--
+-- > fromDistinctAscList [(3,"b"), (5,"a")] == fromList [(3, "b"), (5, "a")]
+fromDistinctAscList :: [(Key, a)] -> WordMap a
+fromDistinctAscList = fromList
 
 -- | /O(n)/. Filter all values that satisfy some predicate.
 --

@@ -291,16 +291,16 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 #### Lists
 * `toList`. Delegated, using `toAscList`.
 * `fromList`. Delegated, using lots of `insert`s.
-* `fromListWith`. _Unimplemented_.
-* `fromListWithKey`. _Unimplemented_.
+* `fromListWith`. Delegated, using lots of `insert`s.
+* `fromListWithKey`. Delegated, using lots of `insert`s.
 
 #### Ordered lists
 * `toAscList`. Delegated, using `foldrWithKey`.
 * `toDescList`. Delegated, using `foldlWithKey`.
-* `fromAscList`. _Unimplemented_.
-* `fromAscListWith`. _Unimplemented_.
-* `fromAscListWithKey`. _Unimplemented_.
-* `fromDistinctAscList`. _Unimplemented_.
+* `fromAscList`. Delegated, using `fromList`.
+* `fromAscListWith`. Delegated, using `fromListWith`.
+* `fromAscListWithKey`. Delegated, using `fromListWithKey`.
+* `fromDistinctAscList`. Delegated, using `fromList`.
 
 ### Filter
 * `filter`. Delegated, using `filterWithKey`.
