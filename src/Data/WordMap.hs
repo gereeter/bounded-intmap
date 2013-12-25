@@ -86,9 +86,17 @@ module Data.WordMap (
     , foldlWithKey'
     
     -- * Conversion
+    , elems
+    , keys
+    , assocs
+    
     -- ** Lists
     , toList
     , fromList
+    
+    -- ** Ordered Lists
+    , toAscList
+    , toDescList
     
     -- * Filter
     , filter

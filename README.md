@@ -282,21 +282,21 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `foldlWithKey'`. Raw.
 
 ### Conversion
-* `elems`. _Unimplemented_.
-* `keys`. _Unimplemented_.
-* `assocs`. _Unimplemented_.
+* `elems`. Delegated, using `foldr`.
+* `keys`. Delegated, using `foldrWithKey`.
+* `assocs`. Delegated, using `toAscList`.
 * `keysSet`. _Unimplemented_. Note that I'm not sure whether to convert to stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
 * `fromSet`. _Unimplemented_. Note that I'm not sure whether to convert from stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
 
 #### Lists
-* `toList`. Raw.
+* `toList`. Delegated, using `toAscList`.
 * `fromList`. Delegated, using lots of `insert`s.
 * `fromListWith`. _Unimplemented_.
 * `fromListWithKey`. _Unimplemented_.
 
 #### Ordered lists
-* `toAscList`. _Unimplemented_.
-* `toDescList`. _Unimplemented_.
+* `toAscList`. Delegated, using `foldrWithKey`.
+* `toDescList`. Delegated, using `foldlWithKey`.
 * `fromAscList`. _Unimplemented_.
 * `fromAscListWith`. _Unimplemented_.
 * `fromAscListWithKey`. _Unimplemented_.

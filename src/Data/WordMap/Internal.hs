@@ -1507,22 +1507,54 @@ foldlWithKey' f z = start
     
     s = ($!)
 
+-- TODO: make the conversion functions good producers
+
+-- | /O(n)/.
+-- Return all elements of the map in the ascending order of their keys.
+-- Subject to list fusion.
+--
+-- > elems (fromList [(5,"a"), (3,"b")]) == ["b","a"]
+-- > elems empty == []
+elems :: WordMap a -> [a]
+elems = foldr (:) []
+
+-- | /O(n)/. Return all keys of the map in ascending order. Subject to list
+-- fusion.
+--
+-- > keys (fromList [(5,"a"), (3,"b")]) == [3,5]
+-- > keys empty == []
+keys :: WordMap a -> [Key]
+keys = foldrWithKey (\k _ l -> k : l) []
+
+-- | /O(n)/. An alias for 'toAscList'. Returns all key\/value pairs in the
+-- map in ascending key order. Subject to list fusion.
+--
+-- > assocs (fromList [(5,"a"), (3,"b")]) == [(3,"b"), (5,"a")]
+-- > assocs empty == []
+assocs :: WordMap a -> [(Key, a)]
+assocs = toAscList
+
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: WordMap a -> [(Key, a)]
-toList = start
-  where
-    start  Empty = []
-    start (NonEmpty min minV node) = (min, minV) : goL node []
-    
-    goL Tip rest = rest
-    goL (Bin max maxV l r) rest = goL l $ goR r $ (max, maxV) : rest
-    
-    goR Tip rest = rest
-    goR (Bin min minV l r) rest = (min, minV) : (goL l $ goR r $ rest)
+toList = toAscList
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> WordMap a
 fromList = Data.Foldable.foldr (uncurry insert) empty
+
+-- | /O(n)/. Convert the map to a list of key\/value pairs where the
+-- keys are in ascending order. Subject to list fusion.
+--
+-- > toAscList (fromList [(5,"a"), (3,"b")]) == [(3,"b"), (5,"a")]
+toAscList :: WordMap a -> [(Key, a)]
+toAscList = foldrWithKey (\k v l -> (k, v) : l) []
+
+-- | /O(n)/. Convert the map to a list of key\/value pairs where the keys
+-- are in descending order. Subject to list fusion.
+--
+-- > toDescList (fromList [(5,"a"), (3,"b")]) == [(5,"a"), (3,"b")]
+toDescList :: WordMap a -> [(Key, a)]
+toDescList = foldlWithKey (\l k v -> (k, v) : l) []
 
 -- | /O(n)/. Filter all values that satisfy some predicate.
 --
