@@ -37,6 +37,9 @@ properties = testGroup "Properties"
     , testGroup "Split"
         [ testProperty "Specification" $ \k m -> splitLookup k (m :: WordMap Int) == (filterWithKey (\k' _ -> k' < k) m, lookup k m, filterWithKey (\k' _ -> k' > k) m)
         ]
+    , testGroup "Partition"
+        [ testProperty "Specification" $ \(Fun _ f) m -> partitionWithKey (curry f) (m :: WordMap Int) == (filterWithKey (curry f) m, filterWithKey (curry (not . f)) m)
+        ]
     ]
 
 unitTests :: TestTree

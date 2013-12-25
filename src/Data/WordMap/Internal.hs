@@ -1574,7 +1574,7 @@ filterWithKey p = start
                 Bin maxI maxVI lI rI -> NonEmpty maxI maxVI (Bin min minV lI rI)
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goL l) r')
         | otherwise = binR (goDeleteL l) (goDeleteR r)
-{-
+
 -- | /O(n)/. Partition the map according to some predicate. The first
 -- map contains all elements that satisfy the predicate, the second all
 -- elements that fail the predicate. See also 'split'.
@@ -1595,23 +1595,74 @@ partition p = partitionWithKey (const p)
 partitionWithKey :: (Key -> a -> Bool) -> WordMap a -> (WordMap a, WordMap a)
 partitionWithKey p = start
   where
-    start Empty = Empty
-    start (NonEmpty min root) = goL min root
+    start Empty = (Empty, Empty)
+    start (NonEmpty min minV root)
+        | p min minV = let SP t f = goTrueL root
+                       in (NonEmpty min minV t, f)
+        | otherwise  = let SP t f = goFalseL root
+                       in (t, NonEmpty min minV f)
     
-    goL min (Tip x)
-        | p min x = (NonEmpty min (Tip x), Empty)
-        | otherwise = (Empty, NonEmpty min (Tip x))
-    goL min (Bin max l r) = let (lt, lf) = goL min l
-                                (rt, rf) = goR max r
-                            in  (binL lt rt, binR lf rf)
+    goTrueL Tip = SP Tip Empty
+    goTrueL (Bin max maxV l r)
+        | p max maxV = let SP tl fl = goTrueL l
+                           SP tr fr = goTrueR r
+                       in SP (Bin max maxV tl tr) (binL fl fr)
+        | otherwise = let SP tl fl = goTrueL l
+                          SP tr fr = goFalseR r
+                          t = case tr of
+                            Empty -> tl
+                            NonEmpty max' maxV' r' -> Bin max' maxV' tl r'
+                          f = case fl of
+                            Empty -> flipBounds $ NonEmpty max maxV fr
+                            NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max maxV l' fr)
+                      in SP t f
     
-    goR max (Tip x)
-        | p max x = (NonEmpty max (Tip x), Empty)
-        | otherwise = (Empty, NonEmpty max (Tip x))
-    goR max (Bin min l r) = let (lt, lf) = goL min l
-                                (rt, rf) = goR max r
-                            in  (binL lt rt, binR lf rf)
--}
+    goTrueR Tip = SP Tip Empty
+    goTrueR (Bin min minV l r)
+        | p min minV = let SP tl fl = goTrueL l
+                           SP tr fr = goTrueR r
+                       in SP (Bin min minV tl tr) (binR fl fr)
+        | otherwise = let SP tl fl = goFalseL l
+                          SP tr fr = goTrueR r
+                          t = case tl of
+                            Empty -> tr
+                            NonEmpty min' minV' l' -> Bin min' minV' l' tr
+                          f = case fr of
+                            Empty -> flipBounds $ NonEmpty min minV fl
+                            NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min minV fl r')
+                      in SP t f
+    
+    goFalseL Tip = SP Empty Tip
+    goFalseL (Bin max maxV l r)
+        | p max maxV = let SP tl fl = goFalseL l
+                           SP tr fr = goTrueR r
+                           t = case tl of
+                             Empty -> flipBounds $ NonEmpty max maxV tr
+                             NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max maxV l' tr)
+                           f = case fr of
+                             Empty -> fl
+                             NonEmpty max' maxV' r' -> Bin max' maxV' fl r'
+                       in SP t f
+        | otherwise = let SP tl fl = goFalseL l
+                          SP tr fr = goFalseR r
+                      in SP (binL tl tr) (Bin max maxV fl fr)
+    
+    goFalseR Tip = SP Empty Tip
+    goFalseR (Bin min minV l r)
+        | p min minV = let SP tl fl = goTrueL l
+                           SP tr fr = goFalseR r
+                           t = case tr of
+                             Empty -> flipBounds $ NonEmpty min minV tl
+                             NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min minV tl r')
+                           f = case fl of
+                             Empty -> fr
+                             NonEmpty min' minV' l' -> Bin min' minV' l' fr
+                       in SP t f
+        | otherwise = let SP tl fl = goFalseL l
+                          SP tr fr = goFalseR r
+                      in SP (binR tl tr) (Bin min minV fl fr)
+
+data SP a b = SP !a !b
 
 -- | /O(n)/. Map values and collect the 'Just' results.
 --

@@ -305,8 +305,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 ### Filter
 * `filter`. Delegated, using `filterWithKey`.
 * `filterWithKey`. Raw.
-* `partition`. _Unimplemented_.
-* `partitionWithKey`. _Unimplemented_.
+* `partition`. Delegated, using `partitionWithKey`.
+* `partitionWithKey`. Raw.
 * `mapMaybe`. Delegated, using `mapMaybeWithKey`.
 * `mapMaybeWithKey`. Raw.
 * `mapEither`. _Unimplemented_.

@@ -93,8 +93,8 @@ module Data.WordMap (
     -- * Filter
     , filter
     , filterWithKey
-{-    , partition
-    , partitionWithKey-}
+    , partition
+    , partitionWithKey
     , mapMaybe
     , mapMaybeWithKey
     , split
