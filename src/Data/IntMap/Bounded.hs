@@ -85,7 +85,7 @@ import Data.Monoid
 
 import Data.Bits (xor)
 
-import Data.WordMap.Internal (WordMap(..), Node(..))
+import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap as W
 
 import Data.Word (Word)
@@ -93,7 +93,7 @@ import Data.Word (Word)
 import Prelude hiding (lookup, null, map, filter, foldl, foldr, min, max)
 
 type Key = Int
-newtype IntMap a = IntMap (W.WordMap a)
+newtype IntMap a = IntMap (WordMap a)
 
 instance Functor IntMap where
     fmap f (IntMap m) = IntMap (fmap f m)
