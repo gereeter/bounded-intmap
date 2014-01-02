@@ -10,6 +10,7 @@ module Data.WordMap.Lazy (
     
     -- * Operators
     , (!)
+    , (\\)
     
     -- * Query
     , null
@@ -93,10 +94,16 @@ module Data.WordMap.Lazy (
     -- ** Lists
     , toList
     , fromList
+    , fromListWith
+    , fromListWithKey
     
     -- ** Ordered Lists
     , toAscList
     , toDescList
+    , fromAscList
+    , fromAscListWith
+    , fromAscListWithKey
+    , fromDistinctAscList
     
     -- * Filter
     , filter
@@ -109,6 +116,22 @@ module Data.WordMap.Lazy (
     , mapEitherWithKey
     , split
     , splitLookup
+    
+    -- * Min\/Max
+    , findMin
+    , findMax
+    , deleteMin
+    , deleteMax
+    , deleteFindMin
+    , deleteFindMax
+    , updateMin
+    , updateMax
+    , updateMinWithKey
+    , updateMaxWithKey
+    , minView
+    , maxView
+    , minViewWithKey
+    , maxViewWithKey
     
     -- * Debugging
     , showTree
