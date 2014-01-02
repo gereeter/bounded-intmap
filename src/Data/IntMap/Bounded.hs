@@ -46,9 +46,19 @@ module Data.IntMap.Bounded (
     , map
     , mapWithKey
     
-    -- * Conversions
+    -- * Conversion
 {-    , toList-}
     , fromList
+    
+    -- * Filter
+    , filter
+    , filterWithKey
+    , partition
+    , partitionWithKey
+    , mapMaybe
+    , mapMaybeWithKey
+    , mapEither
+    , mapEitherWithKey
     
     -- * Debugging
     , showTree
@@ -66,7 +76,7 @@ import Data.Bits (xor)
 import Data.WordMap.Internal (WordMap(..), Node(..))
 import qualified Data.WordMap as W
 
-import Prelude hiding (lookup, null, map)
+import Prelude hiding (lookup, null, map, filter)
 
 type Key = Int
 newtype IntMap a = IntMap (W.WordMap a)
@@ -174,6 +184,30 @@ mapWithKey f (IntMap m) = IntMap (W.mapWithKey f' m) where
 
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . fmap (\(k, v) -> (fromIntegral k, v))
+
+filter :: (a -> Bool) -> IntMap a -> IntMap a
+filter p (IntMap m) = IntMap (W.filter p m)
+
+filterWithKey :: (Key -> a -> Bool) -> IntMap a -> IntMap a
+filterWithKey p (IntMap m) = IntMap (W.filterWithKey (p . fromIntegral) m)
+
+partition :: (a -> Bool) -> IntMap a -> (IntMap a, IntMap a)
+partition p (IntMap m) = let (t, f) = W.partition p m in (IntMap t, IntMap f)
+
+partitionWithKey :: (Key -> a -> Bool) -> IntMap a -> (IntMap a, IntMap a)
+partitionWithKey p (IntMap m) = let (l, r) = W.partitionWithKey (p . fromIntegral) m in (IntMap l, IntMap r)
+
+mapMaybe :: (a -> Maybe b) -> IntMap a -> IntMap b
+mapMaybe f (IntMap m) = IntMap (W.mapMaybe f m)
+
+mapMaybeWithKey :: (Key -> a -> Maybe b) -> IntMap a -> IntMap b
+mapMaybeWithKey f (IntMap m) = IntMap (W.mapMaybeWithKey (f . fromIntegral) m)
+
+mapEither :: (a -> Either b c) -> IntMap a -> (IntMap b, IntMap c)
+mapEither f (IntMap m) = let (l, r) = W.mapEither f m in (IntMap l, IntMap r)
+
+mapEitherWithKey :: (Key -> a -> Either b c) -> IntMap a -> (IntMap b, IntMap c)
+mapEitherWithKey f (IntMap m) = let (l, r) = W.mapEitherWithKey (f . fromIntegral) m in (IntMap l, IntMap r)
 
 showTree :: Show a => IntMap a -> String
 showTree (IntMap m) = W.showTree m
