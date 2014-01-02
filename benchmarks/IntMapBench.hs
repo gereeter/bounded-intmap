@@ -53,6 +53,52 @@ main = do
                 , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insert k v m) m sElemsSearch) sparseW
                 ]
             ]
+        , bgroup "insertWith"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (\m -> foldl' (\m (k, v) -> M.insertWith (+) k v m) m elems) denseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insertWith (+) k v m) m elems) denseW
+                ]
+            , bgroup "absent"
+                [ bench "IntMap" $ whnf (\m -> foldl' (\m (k, v) -> M.insertWith (+) k v m) m sElemsSearch) sparseM
+                , bench "WordMap" $ whnf (\m -> foldl' (\m (k, v) -> W.insertWith (+) k v m) m sElemsSearch) sparseW
+                ]
+            ]
+        , bgroup "map"
+            [ bench "IntMap"  $ whnf (M.map (+1)) denseM
+            , bench "WordMap" $ whnf (W.map (+1)) denseW
+            ]
+        , bgroup "mapWithKey"
+            [ bench "IntMap"  $ whnf (M.mapWithKey (+)) denseM
+            , bench "WordMap" $ whnf (W.mapWithKey (+)) denseW
+            ]
+        , bgroup "foldlWithKey"
+            [ bench "IntMap"  $ whnf (M.foldlWithKey add3 0) denseM
+            , bench "WordMap" $ whnf (W.foldlWithKey add3 0) denseW
+            ]
+        , bgroup "foldlWithKey'"
+            [ bench "IntMap"  $ whnf (M.foldlWithKey' add3 0) denseM
+            , bench "WordMap" $ whnf (W.foldlWithKey' add3 0) denseW
+            ]
+        , bgroup "mapMaybe"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (M.mapMaybe Just) denseM
+                , bench "WordMap" $ whnf (W.mapMaybe Just) denseW
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (M.mapMaybe (const Nothing)) denseM
+                , bench "WordMap" $ whnf (W.mapMaybe (const Nothing)) denseW
+                ]
+            ]
+        , bgroup "mapMaybeWithKey"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (M.mapMaybeWithKey (const Just)) denseM
+                , bench "WordMap" $ whnf (W.mapMaybeWithKey (const Just)) denseW
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (M.mapMaybeWithKey (const (const Nothing))) denseM
+                , bench "WordMap" $ whnf (W.mapMaybeWithKey (const (const Nothing))) denseW
+                ]
+            ]
         , bgroup "delete"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m k -> M.delete k m) m keys) denseM
@@ -123,3 +169,7 @@ main = do
     sKeys = [1,3..2^12]
     sKeysSearch = [2,4..2^12]
     sValues = [1,3..2^12]
+
+{-# INLINE add3 #-}
+add3 :: Int -> Int -> Int -> Int
+add3 a b c = a + b + c
