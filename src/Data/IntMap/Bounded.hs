@@ -202,6 +202,7 @@ mapWithKey :: (Key -> a -> b) -> IntMap a -> IntMap b
 mapWithKey f (IntMap m) = IntMap (W.mapWithKey f' m) where
     f' = f . w2i
 
+{-# INLINE foldr #-}
 foldr :: (a -> b -> b) -> b -> IntMap a -> b
 foldr f z = start
   where
@@ -217,6 +218,7 @@ foldr f z = start
     goR Tip acc = acc
     goR (Bin _ minV l r) acc = f minV (goL l (goR r acc))
 
+{-# INLINE foldl #-}
 foldl :: (a -> b -> a) -> a -> IntMap b -> a
 foldl f z = start
   where
@@ -232,6 +234,7 @@ foldl f z = start
     goR acc Tip = acc
     goR acc (Bin _ minV l r) = goR (goL (f acc minV) l) r
 
+{-# INLINE foldrWithKey #-}
 foldrWithKey :: (Key -> a -> b -> b) -> b -> IntMap a -> b
 foldrWithKey f z = start
   where
@@ -249,6 +252,7 @@ foldrWithKey f z = start
     
     f' k a b = f (w2i k) a b
 
+{-# INLINE foldlWithKey #-}
 foldlWithKey :: (a -> Key -> b -> a) -> a -> IntMap b -> a
 foldlWithKey f z = start
   where
@@ -266,6 +270,7 @@ foldlWithKey f z = start
     
     f' a k b = f a (w2i k) b
 
+{-# INLINE foldr' #-}
 foldr' :: (a -> b -> b) -> b -> IntMap a -> b
 foldr' f z = start
   where
@@ -281,6 +286,7 @@ foldr' f z = start
     goR Tip acc = acc
     goR (Bin _ minV l r) acc = f minV $! goL l $! goR r $! acc
 
+{-# INLINE foldl' #-}
 foldl' :: (a -> b -> a) -> a -> IntMap b -> a
 foldl' f z = start
   where
@@ -298,6 +304,7 @@ foldl' f z = start
     
     s = ($!)
 
+{-# INLINE foldrWithKey' #-}
 foldrWithKey' :: (Key -> a -> b -> b) -> b -> IntMap a -> b
 foldrWithKey' f z = start
   where
@@ -315,6 +322,7 @@ foldrWithKey' f z = start
     
     f' k a b = f (w2i k) a b
 
+{-# INLINE foldlWithKey' #-}
 foldlWithKey' :: (a -> Key -> b -> a) -> a -> IntMap b -> a
 foldlWithKey' f z = start
   where
