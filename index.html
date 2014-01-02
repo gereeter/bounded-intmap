@@ -1,0 +1,553 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Bounded-intmap by gereeter</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="stylesheets/ie.css">
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="https://github.com/gereeter/bounded-intmap">View On GitHub</a></li>
+          <li class="downloads"><a href="https://github.com/gereeter/bounded-intmap/zipball/master">ZIP</a></li>
+          <li class="downloads"><a href="https://github.com/gereeter/bounded-intmap/tarball/master">TAR</a></li>
+          <li class="title">DOWNLOADS</li>
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Bounded-intmap</h1>
+          <p>A reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes.</p>
+          <hr>
+          <span class="credits left">Project maintained by <a href="https://github.com/gereeter">gereeter</a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+
+        <h1>
+<a name="bounded-intmap" class="anchor" href="#bounded-intmap"><span class="octicon octicon-link"></span></a>bounded-intmap</h1>
+
+<p><code>bounded-intmap</code> is a reimplementation of <code>Data.IntMap</code> that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described <a href="https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4">here</a>. As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock <code>Data.IntMap</code>. Note that only three types of function in the benchmark, <code>insert</code>, <code>intersection</code>, and <code>foldlWithKey</code>, are slower than stock <code>Data.IntMap</code>, and even then <code>insert</code> is only slower if the key is not already present in the map.</p>
+
+<p>I deviate from the original implementation in a couple of ways:</p>
+
+<ul>
+<li>
+<p>I removed the redundant encoding of bounds. Previously, you might have a tree like this:</p>
+
+<pre><code>       0,7
+      /    \
+   0,3      4,7 
+  /   \     /  \
+0,1   2,3  4,5  6,7
+</code></pre>
+
+<p>Now, you have trees like this:</p>
+
+<pre><code>    0,7
+    /  \
+   3    4 
+  / \  / \
+ 1   2 5  6
+</code></pre>
+
+<p>Note that this means that this implementation consumes less memory than the current <code>Data.IntMap</code>.</p>
+</li>
+<li><p>I factored the datatype into two pieces: <code>Node</code> for non-empty trees, and <code>WordMap</code> for possibly empty trees.</p></li>
+<li>I cache some of the computation for locating a key as I traverse the key, making it quicker to decide which way to go.</li>
+</ul><h2>
+<a name="description-of-the-internals" class="anchor" href="#description-of-the-internals"><span class="octicon octicon-link"></span></a>Description of the internals</h2>
+
+<h3>
+<a name="the-basic-integer-map-the-bitwise-trie" class="anchor" href="#the-basic-integer-map-the-bitwise-trie"><span class="octicon octicon-link"></span></a>The basic integer map: the bitwise trie</h3>
+
+<p>We are trying to create an efficient, simple mapping from integers to values. The most common approaches for these are hash tables, which are not persistent (though we can come close with HAMTs), and binary search trees, which work well, but don't use any special properties of the integer. To come up with this mapping, we need to think of integers not as numbers, but instead as strings of bits. Once we change our mindset, we can use the standard <em>trie</em> data structure to build our mapping. As bits are particularly simple, so is the resulting structure:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="kr">data</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Bin</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="kt">Tip</span> <span class="n">a</span> <span class="o">|</span> <span class="kt">Nil</span>
+</pre></div>
+
+<p>The <code>Bin</code> constructor represents a bitwise branch, and the <code>Tip</code> constructor comes after (on my machine) 64 <code>Bin</code> construtors in the tree. The associated basic operations are fairly simple:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="nf">lookup</span> <span class="ow">::</span> <span class="kt">Word</span> <span class="ow">-&gt;</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Maybe</span> <span class="n">a</span>
+<span class="nf">lookup</span> <span class="n">k</span> <span class="ow">=</span> <span class="n">go</span> <span class="mi">0</span>
+  <span class="kr">where</span>
+    <span class="n">go</span> <span class="n">b</span> <span class="p">(</span><span class="kt">Bin</span> <span class="n">l</span> <span class="n">r</span><span class="p">)</span> <span class="ow">=</span> <span class="kr">if</span> <span class="n">testBit</span> <span class="n">b</span> <span class="n">k</span>
+                     <span class="kr">then</span> <span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="n">l</span>
+                     <span class="kr">else</span> <span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="n">r</span>
+    <span class="n">go</span> <span class="kr">_</span> <span class="p">(</span><span class="kt">Tip</span> <span class="n">x</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Just</span> <span class="n">x</span>
+    <span class="n">go</span> <span class="kr">_</span> <span class="kt">Nil</span> <span class="ow">=</span> <span class="kt">Nothing</span>
+
+<span class="nf">insert</span> <span class="ow">::</span> <span class="kt">Word</span> <span class="ow">-&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">WordMap</span> <span class="n">a</span>
+<span class="nf">insert</span> <span class="n">k</span> <span class="n">a</span> <span class="ow">=</span> <span class="n">go</span> <span class="mi">0</span>
+  <span class="kr">where</span>
+    <span class="n">go</span> <span class="mi">64</span> <span class="kr">_</span> <span class="ow">=</span> <span class="kt">Tip</span> <span class="n">a</span>
+    <span class="n">go</span> <span class="n">b</span> <span class="p">(</span><span class="kt">Bin</span> <span class="n">l</span> <span class="n">r</span><span class="p">)</span> <span class="ow">=</span> <span class="kr">if</span> <span class="n">testBit</span> <span class="n">b</span> <span class="n">k</span>
+                     <span class="kr">then</span> <span class="kt">Bin</span> <span class="p">(</span><span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="n">l</span><span class="p">)</span> <span class="n">r</span>
+                     <span class="kr">else</span> <span class="kt">Bin</span> <span class="n">l</span> <span class="p">(</span><span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="n">r</span><span class="p">)</span>
+    <span class="n">go</span> <span class="n">b</span> <span class="kr">_</span> <span class="ow">=</span> <span class="kr">if</span> <span class="n">testBit</span> <span class="n">b</span> <span class="n">k</span>
+             <span class="kr">then</span> <span class="kt">Bin</span> <span class="p">(</span><span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="kt">Nil</span><span class="p">)</span> <span class="kt">Nil</span>
+             <span class="kr">else</span> <span class="kt">Bin</span> <span class="kt">Nil</span> <span class="p">(</span><span class="n">go</span> <span class="p">(</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="kt">Nil</span><span class="p">)</span>
+</pre></div>
+
+<p><code>delete</code> follows similarly, and <code>union</code> isn't to hard - I leave it as an exercise to the reader. Unfortunately, this approach is horribly slow and space efficient. To see why, let us look at the tree structure for <code>singleton 5 "hello"</code>:</p>
+
+<pre><code>\0
+ \0
+  \0
+   \0
+    \0
+     \0
+      \0
+       \0
+        \0
+         \0
+          \0
+           \0
+            \0
+           1/
+            \0
+           1/
+         "hello"
+</code></pre>
+
+<p>Note that, for brevity, I have shortened the word size to 16 bits - the diagram is 4 times larger for our 64 bit system. In this atrocious tree structure, there is one pointer for every bit - a 64 fold explosion in space. Arguably worse is the fact that every single <code>lookup</code> or <code>insert</code> or <code>delete</code> must traverse 64 pointers, resulting in 64 cache misses and a terrible runtime. So, how do we fix this?</p>
+
+<h3>
+<a name="path-compression-patricia-trees-and-stock-dataintmap" class="anchor" href="#path-compression-patricia-trees-and-stock-dataintmap"><span class="octicon octicon-link"></span></a>Path compression: PATRICIA trees and stock <code>Data.IntMap</code>
+</h3>
+
+<p>The key observation to reducing the space usage is that we can compress nodes that only have one child together - since they form a linear chain, we can simply concatenate the bits within that chain. For example, again temporarily shortening the word size to 16 bits:</p>
+
+<pre><code>singleton 5 "hello":
+
+| 0000000000000101
+"hello"
+
+fromList [(1, "1"), (4, "4"), (5, "5")]:
+
+     | 0000000000000___
+001/  \10_
+"1"  0/ \1
+    "4" "5"
+</code></pre>
+
+<p>This clearly produces a much more space efficient structure, and the basic operations, while more complicated, are still straightforward. In Haskell, the structure is:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="kr">data</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Bin</span> <span class="kt">Prefix</span> <span class="kt">Mask</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="kt">Tip</span> <span class="kt">Word</span> <span class="n">a</span> <span class="o">|</span> <span class="kt">Nil</span>
+</pre></div>
+
+<p>Note that in the above representation, the <code>Mask</code> is used to tell how long the <code>Prefix</code> is, and the <code>Word</code> in the <code>Tip</code> nodes is to avoid the for using <code>Bin</code> for singletons. This final representation is known as the big-endian PATRICIA tree, and is what today's <code>Data.IntMap</code> uses internally, albeit with some optimizations like strictness and unpacking, which I have omitted for simplicity. However, we can take this structure a few steps farther, which is the goal of this package.</p>
+
+<h3>
+<a name="implicit-prefixes-a-simpler-representation" class="anchor" href="#implicit-prefixes-a-simpler-representation"><span class="octicon octicon-link"></span></a>Implicit prefixes: a simpler representation</h3>
+
+<p>The central observation for this step comes from Edward Kmett, as mentioned in a previous section. In the PATRICIA tree representation, we explicitly stored the common prefix of all the keys in a subtree. However, this prefix is not needed if we know what the largest and smallest keys stored within a subtree are - the common prefix of all the keys is just the common prefix of the minimum and maximum keys. Using this observation, we get another representation:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="kr">data</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Bin</span> <span class="kt">Word</span> <span class="kt">Word</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="p">(</span><span class="kt">WordMap</span> <span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="kt">Tip</span> <span class="kt">Word</span> <span class="n">a</span> <span class="o">|</span> <span class="kt">Nil</span>
+</pre></div>
+
+<p>In tree form:</p>
+
+<pre><code>singleton 5 hello:
+
+| 5
+"hello"
+
+fromList [(1, "1"), (4, "4"), (5, "5")]:
+
+    | (1, 5)
+  1/  \ (4, 5)
+"1"  4/ \5
+    "4"  "5"
+</code></pre>
+
+<p>Traversing this tree efficiently is a bit more difficult, but still possible. For details, see the section below titled "Figuring out which way to go". This representation, since it gives exact minimums and maximums, can actually be more efficient than the PATRICIA tree, as seaches can terminate earlier. The range of values between the minimum and maximum is generally smaller than the range of values with the correct prefix, and so searches will know earlier if they are going to fail. However, the big gains of this representation come after a few more steps.</p>
+
+<h3>
+<a name="removing-redundancy" class="anchor" href="#removing-redundancy"><span class="octicon octicon-link"></span></a>Removing redundancy</h3>
+
+<p>You may have noticed that the above representation store many keys repeatedly - in the {1,4,5} example, 1 was stored twice, 4 was stored twice, and 5 was stored three times. The reason for this is very simple. In the {1,4,5} example, we knew that the minimum was 1 and the maximum was 5. At the first branch, we split the set into two parts - {1} and {4,5}. However, the minimum of the smaller set was exactly the minimum of the original set. Similarly, the maximum of the larger set was exactly the maximum of the original set. Since we always travers the tree downward, this information is not needed. We can restructure the tree to only store 1 new value at each branch, removing the redundancy. Note that we also have to add an extra value at the root node, where this transformation does not work. In summary:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="kr">data</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Empty</span> <span class="o">|</span> <span class="kt">NonEmpty</span> <span class="kt">Word</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span>
+<span class="kr">data</span> <span class="kt">Node</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Bin</span> <span class="kt">Word</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="kt">Tip</span> <span class="n">a</span>
+</pre></div>
+
+<p>In tree form:</p>
+
+<pre><code>    | 1
+    | 5
+   / \
+"1" 4/ \
+   "4"  "5"
+</code></pre>
+
+<p>With this optimization, the operations get more complicated again, but we have achieved something amazing - this new representation is more memory efficient than stock <code>Data.IntMap</code>. We will improve this again, as well as the runtime, with our final optimization.</p>
+
+<h3>
+<a name="moving-the-values-upward" class="anchor" href="#moving-the-values-upward"><span class="octicon octicon-link"></span></a>Moving the values upward</h3>
+
+<p>If you look carefully at the tree structure from the previous section, you will notice that we removed the redundancy perfectly - every key is stored exactly once. However, if the keys are stored in a unique location in the tree, why are the values stored far away? We can move the values upward in the tree to pair them with their keys and so get a simpler structure.</p>
+
+<p>In Haskell:</p>
+
+<div class="highlight highlight-haskell"><pre><span class="kr">data</span> <span class="kt">WordMap</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Empty</span> <span class="o">|</span> <span class="kt">NonEmpty</span> <span class="kt">Word</span> <span class="n">a</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span>
+<span class="kr">data</span> <span class="kt">Node</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Bin</span> <span class="kt">Word</span> <span class="n">a</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span> <span class="p">(</span><span class="kt">Node</span> <span class="n">a</span><span class="p">)</span> <span class="o">|</span> <span class="kt">Tip</span>
+</pre></div>
+
+<p>In tree form:</p>
+
+<pre><code>    | 1 "1"
+    | 5 "5"
+   / \
+     / \ 4 "4"
+</code></pre>
+
+<p>At first, this seems to improve neither runtime nor space usage - after all, all we did was move the values around. However, the <code>Tip</code> constructor is now empty, meaning that it can be shared among all the leaves of every tree. The <code>Tip</code> constructor essentiall disappears from the space usage profile, and we get a gain in memory. The runtime effect is even larger. Because the values are now high in the tree, functions like <code>lookup</code> don't have to go all the way to the leaves. This means following fewer pointers, which means fewer cache misses and just a shorter loop. Admittedly, after all this work, our functions have become much larger than the sizes they started with, but we have won speed gains and significant memory gains from the current state of the art.</p>
+
+<h3>
+<a name="figuring-out-which-way-to-go" class="anchor" href="#figuring-out-which-way-to-go"><span class="octicon octicon-link"></span></a>Figuring out which way to go</h3>
+
+<p>Suppose we are looking up a key <code>k</code> in a tree. We know that the minimum key in the tree is <code>min</code> and that the maximum key is <code>max</code>. Represented in binary:</p>
+
+<pre><code>         shared prefix   bit to split on
+           /----------\  /
+min:       010010010101 0 ????????
+max:       010010010101 1 ????????
+k:         010010010101 ? ????????
+</code></pre>
+
+<p>To figure out in which subtree we need to recursively search for <code>k</code>, we need to know whether the bit to split on is zero or one. Now, if it is zero, then</p>
+
+<pre><code>xor min k: 000000000000 0 ????????
+xor k max: 000000000000 1 ????????
+</code></pre>
+
+<p>If it is one:</p>
+
+<pre><code>xor min k: 000000000000 1 ????????
+xor k max: 000000000000 0 ????????
+</code></pre>
+
+<p>Therefore, the splitting bit is set iff <code>xor min k &gt; xor k max</code>. Taking the terminology from the original article, <code>insideR k min max = xor min k &gt; xor k max</code>.</p>
+
+<h2>
+<a name="benchmark-results" class="anchor" href="#benchmark-results"><span class="octicon octicon-link"></span></a>Benchmark Results</h2>
+
+<p>The criterion report is <a href="https://gereeter.github.io/bounded-intmap/report.html">here</a>.</p>
+
+<h2>
+<a name="current-progress" class="anchor" href="#current-progress"><span class="octicon octicon-link"></span></a>Current Progress</h2>
+
+<p>Below is a listing of every function in stock <code>Data.IntMap</code>, along with the implementation state in <code>bounded-intmap</code>. There are three implementation states:</p>
+
+<ul>
+<li>Raw means that I have implemented the function directly. These functions should be on par with or faster than their corresponding functions in stock <code>Data.IntMap</code>.</li>
+<li>Delegated means that I have implemented the function, but in terms of other functions. This usually means that it will be slower than stock <code>Data.IntMap</code>, sometimes asymptotically, and I haven't figured out how to implement it (or implement it nicely) yet. Note that some functions marked as such, like <code>insertWithKey</code>, are trivial uses of other functions are should have almost no performance hit.</li>
+<li>Unimplemented means that I have yet to implement the function in any form.</li>
+</ul><h3>
+<a name="operators" class="anchor" href="#operators"><span class="octicon octicon-link"></span></a>Operators</h3>
+
+<ul>
+<li>
+<code>(!)</code>. Delegated, using <code>findWithDefault</code>.</li>
+<li>
+<code>(\\)</code>. Delegated, using <code>difference</code>.</li>
+</ul><h3>
+<a name="query" class="anchor" href="#query"><span class="octicon octicon-link"></span></a>Query</h3>
+
+<ul>
+<li>
+<code>null</code>. Raw.</li>
+<li>
+<code>size</code>. Raw.</li>
+<li>
+<code>member</code>. Raw.</li>
+<li>
+<code>notMember</code>. Raw.</li>
+<li>
+<code>lookup</code>. Raw.</li>
+<li>
+<code>findWithDefault</code>. Raw.</li>
+<li>
+<code>lookupLT</code>. Raw.</li>
+<li>
+<code>lookupGT</code>. Raw.</li>
+<li>
+<code>lookupLE</code>. Raw.</li>
+<li>
+<code>lookupGE</code>. Raw.</li>
+</ul><h3>
+<a name="construction" class="anchor" href="#construction"><span class="octicon octicon-link"></span></a>Construction</h3>
+
+<ul>
+<li>
+<code>empty</code>. Raw.</li>
+<li>
+<code>singleton</code>. Raw.</li>
+</ul><h4>
+<a name="insertion" class="anchor" href="#insertion"><span class="octicon octicon-link"></span></a>Insertion</h4>
+
+<ul>
+<li>
+<code>insert</code>. Raw.</li>
+<li>
+<code>insertWith</code>. Raw.</li>
+<li>
+<code>insertWithKey</code>. Delegated, using <code>insertWith</code>.</li>
+<li>
+<code>insertLookupWithKey</code>. Raw.</li>
+</ul><h4>
+<a name="deleteupdate" class="anchor" href="#deleteupdate"><span class="octicon octicon-link"></span></a>Delete/Update</h4>
+
+<ul>
+<li>
+<code>delete</code>. Raw.</li>
+<li>
+<code>adjust</code>. Raw.</li>
+<li>
+<code>adjustWithkey</code>. Delegated, using <code>adjust</code>.</li>
+<li>
+<code>update</code>. Raw.</li>
+<li>
+<code>updateWithKey</code>. Delegated, using <code>update</code>.</li>
+<li>
+<code>updateLookupWithKey</code>. Raw.</li>
+<li>
+<code>alter</code>. Delegated, using <code>member</code> and either <code>update</code> or <code>insert</code>.</li>
+</ul><h3>
+<a name="combine" class="anchor" href="#combine"><span class="octicon octicon-link"></span></a>Combine</h3>
+
+<h4>
+<a name="union" class="anchor" href="#union"><span class="octicon octicon-link"></span></a>Union</h4>
+
+<ul>
+<li>
+<code>union</code>. Raw.</li>
+<li>
+<code>unionWith</code>. Delegated, using <code>unionWithKey</code>.</li>
+<li>
+<code>unionWithKey</code>. Raw.</li>
+<li>
+<code>unions</code>. Delegated, using lots of <code>union</code>s.</li>
+<li>
+<code>unionsWith</code>. Delegated, using lots of <code>unionWith</code>s.</li>
+</ul><h4>
+<a name="difference" class="anchor" href="#difference"><span class="octicon octicon-link"></span></a>Difference</h4>
+
+<ul>
+<li>
+<code>difference</code>. Delegated, using <code>foldrWithKey'</code> and lots of <code>delete</code>s.</li>
+<li>
+<code>differenceWith</code>. Delegated, using <code>differenceWithKey</code>.</li>
+<li>
+<code>differenceWithKey</code>. Delegated, using <code>foldrWithKey'</code> and lots of <code>update</code>s.</li>
+</ul><h4>
+<a name="intersection" class="anchor" href="#intersection"><span class="octicon octicon-link"></span></a>Intersection</h4>
+
+<ul>
+<li>
+<code>intersection</code>. Raw. See note on <code>intersectionWithKey</code>.</li>
+<li>
+<code>intersectionWith</code>. Delegated, using <code>intersectionWithKey</code>.</li>
+<li>
+<code>intersectionWithKey</code>. Raw. Note that it is still slower than stock <code>Data.IntMap</code> by up to (though not necessarily) 50%.</li>
+</ul><h4>
+<a name="universal-combining-function" class="anchor" href="#universal-combining-function"><span class="octicon octicon-link"></span></a>Universal combining function</h4>
+
+<ul>
+<li>
+<code>mergeWithKey</code>. <em>Unimplemented</em>. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.</li>
+</ul><h3>
+<a name="traversal" class="anchor" href="#traversal"><span class="octicon octicon-link"></span></a>Traversal</h3>
+
+<h4>
+<a name="map" class="anchor" href="#map"><span class="octicon octicon-link"></span></a>Map</h4>
+
+<ul>
+<li>
+<code>map</code>. Raw. Actually, this is sort of delegated to <code>fmap</code>, but since the delegation is just <code>map = fmap</code> and will probably be inlined, I count this as raw.</li>
+<li>
+<code>mapWithKey</code>. Raw.</li>
+<li>
+<code>traverseWithKey</code>. Raw.</li>
+<li>
+<code>mapAccum</code>. Delegated, using <code>mapAccumWithKey</code>.</li>
+<li>
+<code>mapAccumWithKey</code>. Raw.</li>
+<li>
+<code>mapAccumRWithKey</code>. Raw.</li>
+<li>
+<code>mapKeys</code>. Delegated, using <code>foldrWithKey'</code> and lots of <code>insert</code>s.</li>
+<li>
+<code>mapKeysWith</code>. Delegated, using <code>foldrWithKey'</code> and lots of <code>insertWith</code>s.</li>
+<li>
+<code>mapKeysMonotonic</code>. Delegated, using <code>mapKeys</code>.</li>
+</ul><h4>
+<a name="folds" class="anchor" href="#folds"><span class="octicon octicon-link"></span></a>Folds</h4>
+
+<ul>
+<li>
+<code>foldr</code>. Raw.</li>
+<li>
+<code>foldl</code>. Raw.</li>
+<li>
+<code>foldrWithKey</code>. Raw.</li>
+<li>
+<code>foldlWithKey</code>. Raw.</li>
+<li>
+<code>foldMapWithKey</code>. Raw.</li>
+</ul><h4>
+<a name="strict-folds" class="anchor" href="#strict-folds"><span class="octicon octicon-link"></span></a>Strict folds</h4>
+
+<ul>
+<li>
+<code>foldr'</code>. Raw.</li>
+<li>
+<code>foldl'</code>. Raw.</li>
+<li>
+<code>foldrWithKey'</code>. Raw.</li>
+<li>
+<code>foldlWithKey'</code>. Raw.</li>
+</ul><h3>
+<a name="conversion" class="anchor" href="#conversion"><span class="octicon octicon-link"></span></a>Conversion</h3>
+
+<ul>
+<li>
+<code>elems</code>. Delegated, using <code>foldr</code>.</li>
+<li>
+<code>keys</code>. Delegated, using <code>foldrWithKey</code>.</li>
+<li>
+<code>assocs</code>. Delegated, using <code>toAscList</code>.</li>
+<li>
+<code>keysSet</code>. <em>Unimplemented</em>. Note that I'm not sure whether to convert to stock <code>Data.IntSet</code> or <code>Data.WordSet</code>, which is much more in flux than <code>Data.WordMap</code>.</li>
+<li>
+<code>fromSet</code>. <em>Unimplemented</em>. Note that I'm not sure whether to convert from stock <code>Data.IntSet</code> or <code>Data.WordSet</code>, which is much more in flux than <code>Data.WordMap</code>.</li>
+</ul><h4>
+<a name="lists" class="anchor" href="#lists"><span class="octicon octicon-link"></span></a>Lists</h4>
+
+<ul>
+<li>
+<code>toList</code>. Delegated, using <code>toAscList</code>.</li>
+<li>
+<code>fromList</code>. Delegated, using lots of <code>insert</code>s.</li>
+<li>
+<code>fromListWith</code>. Delegated, using lots of <code>insert</code>s.</li>
+<li>
+<code>fromListWithKey</code>. Delegated, using lots of <code>insert</code>s.</li>
+</ul><h4>
+<a name="ordered-lists" class="anchor" href="#ordered-lists"><span class="octicon octicon-link"></span></a>Ordered lists</h4>
+
+<ul>
+<li>
+<code>toAscList</code>. Delegated, using <code>foldrWithKey</code>.</li>
+<li>
+<code>toDescList</code>. Delegated, using <code>foldlWithKey</code>.</li>
+<li>
+<code>fromAscList</code>. Delegated, using <code>fromList</code>.</li>
+<li>
+<code>fromAscListWith</code>. Delegated, using <code>fromListWith</code>.</li>
+<li>
+<code>fromAscListWithKey</code>. Delegated, using <code>fromListWithKey</code>.</li>
+<li>
+<code>fromDistinctAscList</code>. Delegated, using <code>fromList</code>.</li>
+</ul><h3>
+<a name="filter" class="anchor" href="#filter"><span class="octicon octicon-link"></span></a>Filter</h3>
+
+<ul>
+<li>
+<code>filter</code>. Delegated, using <code>filterWithKey</code>.</li>
+<li>
+<code>filterWithKey</code>. Raw.</li>
+<li>
+<code>partition</code>. Delegated, using <code>partitionWithKey</code>.</li>
+<li>
+<code>partitionWithKey</code>. Raw.</li>
+<li>
+<code>mapMaybe</code>. Delegated, using <code>mapMaybeWithKey</code>.</li>
+<li>
+<code>mapMaybeWithKey</code>. Raw.</li>
+<li>
+<code>mapEither</code>. Delegated, using <code>mapEitherWithKey</code>.</li>
+<li>
+<code>mapEitherWithKey</code>. Raw.</li>
+<li>
+<code>split</code>. Delegated, using <code>splitLookup</code>.</li>
+<li>
+<code>splitLookup</code>. Raw.</li>
+</ul><h3>
+<a name="submap" class="anchor" href="#submap"><span class="octicon octicon-link"></span></a>Submap</h3>
+
+<ul>
+<li>
+<code>isSubmapOf</code>. <em>Unimplemented</em>.</li>
+<li>
+<code>isSubmapOfBy</code>. <em>Unimplemented</em>.</li>
+<li>
+<code>isProperSubmapOf</code>. <em>Unimplemented</em>
+</li>
+<li>
+<code>isProperSubmapOfBy</code>. <em>Unimplemented</em>.</li>
+</ul><h3>
+<a name="minmax" class="anchor" href="#minmax"><span class="octicon octicon-link"></span></a>Min/Max</h3>
+
+<ul>
+<li>
+<code>findMin</code>. Raw. Note that this is asymptotically faster than stock <code>Data.IntMap</code>.</li>
+<li>
+<code>findMax</code>. Raw. Note that this is asymptotically faster than stock <code>Data.IntMap</code>.</li>
+<li>
+<code>deleteMin</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>deleteMax</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>deleteFindMin</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>deleteFindMax</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>updateMin</code>. Delegated, using <code>findMin</code> and <code>update</code>.</li>
+<li>
+<code>updateMax</code>. Delegated, using <code>findMin</code> and <code>update</code>.</li>
+<li>
+<code>updateMinWithKey</code>. Delegated, using <code>findMin</code> and <code>updateWithKey</code>.</li>
+<li>
+<code>updateMaxWithKey</code>. Delegated, using <code>findMin</code> and <code>updateWithKey</code>.</li>
+<li>
+<code>minView</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>maxView</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>minViewWithKey</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+<li>
+<code>maxViewWithKey</code>. Delegated, using <code>findMin</code> and <code>delete</code>.</li>
+</ul><h3>
+<a name="debugging" class="anchor" href="#debugging"><span class="octicon octicon-link"></span></a>Debugging</h3>
+
+<p>Note that this section shouldn't matter to the average user.</p>
+
+<ul>
+<li>
+<code>showTree</code>. Raw.</li>
+<li>
+<code>showTreeWith</code>. <em>Unimplemented</em>.</li>
+</ul>
+      </section>
+
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
