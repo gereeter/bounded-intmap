@@ -194,8 +194,7 @@ Therefore, the splitting bit is set iff `xor min k > xor k max`. Taking the term
 
 Benchmark Results
 -----------------
-
-The criterion report is [here](https://gereeter.github.io/bounded-intmap/report.html).
+The criterion report is [here](http://gereeter.github.io/bounded-intmap/report.html).
 
 Current Progress
 ----------------
