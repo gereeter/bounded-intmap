@@ -46,6 +46,18 @@ module Data.IntMap.Bounded (
     , map
     , mapWithKey
     
+    -- ** Folds
+    , foldr
+    , foldl
+    , foldrWithKey
+    , foldlWithKey
+    
+    -- ** Strict folds
+    , foldr'
+    , foldl'
+    , foldrWithKey'
+    , foldlWithKey'
+    
     -- * Conversion
 {-    , toList-}
     , fromList
@@ -67,7 +79,7 @@ module Data.IntMap.Bounded (
 
 import Control.DeepSeq
 import Control.Applicative hiding (empty)
-import Data.Foldable hiding (toList)
+import qualified Data.Foldable as Foldable (Foldable(..))
 import Data.Traversable
 import Data.Monoid
 
@@ -76,20 +88,26 @@ import Data.Bits (xor)
 import Data.WordMap.Internal (WordMap(..), Node(..))
 import qualified Data.WordMap as W
 
-import Prelude hiding (lookup, null, map, filter)
+import Prelude hiding (lookup, null, map, filter, foldl, foldr, min, max)
 
 type Key = Int
 newtype IntMap a = IntMap (W.WordMap a)
 
 instance Functor IntMap where
     fmap f (IntMap m) = IntMap (fmap f m)
+
+instance Foldable.Foldable IntMap where
+    foldr = foldr
+    foldl = foldl
+    foldr' = foldr'
+    foldl' = foldl'
 {-
-instance Foldable IntMap where
     foldMap f (IntMap Empty) = mempty
     foldMap f (IntMap (NonEmpty min (Tip x))) = f x
     foldMap f (IntMap (NonEmpty min (Bin max l r)))
         | fromIntegral (xor min max) < (0 :: Int) = foldMap f r `mappend` foldMap f l
         | otherwise = foldMap f l `mappend` foldMap f r
+    
 
 instance Traversable IntMap where
     traverse f (IntMap Empty) = pure (IntMap Empty)
@@ -181,6 +199,138 @@ map = fmap
 mapWithKey :: (Key -> a -> b) -> IntMap a -> IntMap b
 mapWithKey f (IntMap m) = IntMap (W.mapWithKey f' m) where
     f' = f . fromIntegral
+
+foldr :: (a -> b -> b) -> b -> IntMap a -> b
+foldr f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty _ minV Tip)) = f minV z
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goR r (f maxV (f minV (goL l z)))
+        | otherwise = f minV (goL l (goR r (f maxV z)))
+    
+    goL Tip acc = acc
+    goL (Bin _ maxV l r) acc = goL l (goR r (f maxV acc))
+    
+    goR Tip acc = acc
+    goR (Bin _ minV l r) acc = f minV (goL l (goR r acc))
+
+foldl :: (a -> b -> a) -> a -> IntMap b -> a
+foldl f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty _ minV Tip)) = f z minV
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goL (f (f (goR z r) maxV) minV) l
+        | otherwise = f (goR (goL (f z minV) l) r) maxV
+
+    goL acc Tip = acc
+    goL acc (Bin _ maxV l r) = f (goR (goL acc l) r) maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin _ minV l r) = goR (goL (f acc minV) l) r
+
+foldrWithKey :: (Key -> a -> b -> b) -> b -> IntMap a -> b
+foldrWithKey f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty min minV Tip)) = f' min minV z
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goR r (f' max maxV (f' min minV (goL l z)))
+        | otherwise = f' min minV (goL l (goR r (f' max maxV z)))
+    
+    goL Tip acc = acc
+    goL (Bin max maxV l r) acc = goL l (goR r (f' max maxV acc))
+    
+    goR Tip acc = acc
+    goR (Bin min minV l r) acc = f' min minV (goL l (goR r acc))
+    
+    f' k a b = f (fromIntegral k) a b
+
+foldlWithKey :: (a -> Key -> b -> a) -> a -> IntMap b -> a
+foldlWithKey f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty min minV Tip)) = f' z min minV
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goL (f' (f' (goR z r) max maxV) min minV) l
+        | otherwise = f' (goR (goL (f' z min minV) l) r) max maxV
+
+    goL acc Tip = acc
+    goL acc (Bin max maxV l r) = f' (goR (goL acc l) r) max maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin min minV l r) = goR (goL (f' acc min minV) l) r
+    
+    f' a k b = f a (fromIntegral k) b
+
+foldr' :: (a -> b -> b) -> b -> IntMap a -> b
+foldr' f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty _ minV Tip)) = f minV $! z
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goR r $! f maxV $! f minV $! goL l $! z
+        | otherwise = f minV $! goL l $! goR r $! f maxV $! z
+    
+    goL Tip acc = acc
+    goL (Bin _ maxV l r) acc = goL l $! goR r $! f maxV $! acc
+    
+    goR Tip acc = acc
+    goR (Bin _ minV l r) acc = f minV $! goL l $! goR r $! acc
+
+foldl' :: (a -> b -> a) -> a -> IntMap b -> a
+foldl' f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty _ minV Tip)) = f z minV
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = s goL (s f (s f (s goR z r) maxV) minV) l
+        | otherwise = s f (s goR (s goL (s f z minV) l) r) maxV
+
+    goL acc Tip = acc
+    goL acc (Bin _ maxV l r) = s f (s goR (s goL acc l) r) maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin _ minV l r) = s goR (s goL (s f acc minV) l) r
+    
+    s = ($!)
+
+foldrWithKey' :: (Key -> a -> b -> b) -> b -> IntMap a -> b
+foldrWithKey' f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty min minV Tip)) = f' min minV $! z
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = goR r $! f' max maxV $! f' min minV $! goL l $! z
+        | otherwise = f' min minV $! goL l $! goR r $! f' max maxV $! z
+    
+    goL Tip acc = acc
+    goL (Bin max maxV l r) acc = goL l $! goR r $! f' max maxV $! acc
+    
+    goR Tip acc = acc
+    goR (Bin min minV l r) acc = f' min minV $! goL l $! goR r $! acc
+    
+    f' k a b = f (fromIntegral k) a b
+
+foldlWithKey' :: (a -> Key -> b -> a) -> a -> IntMap b -> a
+foldlWithKey' f z = start
+  where
+    start (IntMap Empty) = z
+    start (IntMap (NonEmpty min minV Tip)) = s f' z min minV
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | fromIntegral (xor min max) < (0 :: Int) = s goL (s f' (s f' (s goR z r) max maxV) min minV) l
+        | otherwise = s f' (s goR (s goL (s f' z min minV) l) r) max maxV
+
+    goL acc Tip = acc
+    goL acc (Bin max maxV l r) = s f' (s goR (s goL acc l) r) max maxV
+    
+    goR acc Tip = acc
+    goR acc (Bin min minV l r) = s goR (s goL (s f' acc min minV) l) r
+    
+    f' a k b = f a (fromIntegral k) b
+    
+    s = ($!)
 
 fromList :: [(Int, a)] -> IntMap a
 fromList = IntMap . W.fromList . fmap (\(k, v) -> (fromIntegral k, v))
