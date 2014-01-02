@@ -1,7 +1,7 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only three functions in the benchmark, `insert`, `intersection`, and `intersectionWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only three types of function in the benchmark, `insert`, `intersection`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
 
 I deviate from the original implementation in a couple of ways:
 
@@ -191,6 +191,11 @@ If it is one:
     xor k max: 000000000000 0 ????????
 
 Therefore, the splitting bit is set iff `xor min k > xor k max`. Taking the terminology from the original article, `insideR k min max = xor min k > xor k max`.
+
+Benchmark Results
+-----------------
+
+The criterion report is [here](https://gereeter.github.io/bounded-intmap/report.html).
 
 Current Progress
 ----------------
