@@ -367,13 +367,13 @@ delete k = k `seq` start
     start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
         | k == min = let DR min' minV' root' = goDeleteMin max maxV l r in NonEmpty min' minV' root'
-        | otherwise = NonEmpty min minV (goL (xor min k) min root)
+        | otherwise = NonEmpty min minV (goL (xor min k) root)
     
-    goL !_        _      Tip = Tip
-    goL !xorCache min n@(Bin max maxV l r)
+    goL !_           Tip = Tip
+    goL !xorCache n@(Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goL xorCache min l) r
-                    else Bin max maxV l (goR xorCacheMax max r)
+                    then Bin max maxV (goL xorCache l) r
+                    else Bin max maxV l (goR xorCacheMax r)
         | k > max = n
         | otherwise = case r of
             Tip -> l
@@ -381,11 +381,11 @@ delete k = k `seq` start
                                     in  Bin max' maxV' l r'
       where xorCacheMax = xor k max
     
-    goR !_        _      Tip = Tip
-    goR !xorCache max n@(Bin min minV l r)
+    goR !_           Tip = Tip
+    goR !xorCache n@(Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goR xorCache max r)
-                    else Bin min minV (goL xorCacheMin min l) r
+                    then Bin min minV l (goR xorCache r)
+                    else Bin min minV (goL xorCacheMin l) r
         | k < min = n
         | otherwise = case l of
             Tip -> r
@@ -606,7 +606,164 @@ unions = Data.Foldable.foldl' union empty
 --
 -- > difference (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 3 "b"
 difference :: WordMap a -> WordMap b -> WordMap a
-difference m1 m2 = foldrWithKey' (\k _ -> delete k) m1 m2
+difference = start
+  where
+    start Empty !_ = Empty
+    start !m Empty = m
+    start (NonEmpty min1 minV1 root1) (NonEmpty min2 _ root2)
+        | min1 < min2 = NonEmpty min1 minV1 (goL2 min1 root1 min2 root2)
+        | min1 > min2 = goL1 minV1 min1 root1 min2 root2
+        | otherwise = goLFused min1 root1 root2
+    
+    goL1 minV1 min1 Tip min2 n2 = goLookupL min1 minV1 (xor min1 min2) n2
+    goL1 minV1 min1 n1 _ Tip = NonEmpty min1 minV1 n1
+    goL1 minV1 min1 n1@(Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = NonEmpty min1 minV1 n1
+    goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+        LT | xor min2 min1 < xor min1 max2 -> goL1 minV1 min1 n1 min2 l2 -- min1 is arbitrary here - we just need something from tree 1
+           | max1 > max2 -> flipBounds $ NonEmpty max1 maxV1 (goR2 max1 (Bin min1 minV1 l1 r1) max2 r2)
+           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | otherwise -> flipBounds $ goRFused max1 (Bin min1 minV1 l1 r1) r2
+        EQ | max1 > max2 -> binL (goL1 minV1 min1 l1 min2 l2) (NonEmpty max1 maxV1 (goR2 max1 r1 max2 r2))
+           | max1 < max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+           | otherwise -> binL (goL1 minV1 min1 l1 min2 l2) (goRFused max1 r1 r2)
+        GT -> binL (goL1 minV1 min1 l1 min2 n2) (NonEmpty max1 maxV1 r1)
+    
+    goL2 !_   Tip !_   !_  = Tip
+    goL2 min1 n1  min2 Tip = goDeleteL min2 (xor min1 min2) n1
+    goL2 _ n1@(Bin max1 _ _ _) min2 (Bin _ _ _ _) | min2 > max1 = n1
+    goL2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+        LT -> goL2 min1 n1 min2 l2
+        EQ | max1 > max2 -> Bin max1 maxV1 (goL2 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
+           | max1 < max2 -> case goR1 maxV1 max1 r1 max2 r2 of
+                Empty -> goL2 min1 l1 min2 l2
+                NonEmpty max' maxV' r' -> Bin max' maxV' (goL2 min1 l1 min2 l2) r'
+           | otherwise -> case goRFused max1 r1 r2 of
+                Empty -> goL2 min1 l1 min2 l2
+                NonEmpty max' maxV' r' -> Bin max' maxV' (goL2 min1 l1 min2 l2) r'
+        GT | xor min1 min2 < xor min2 max1 -> Bin max1 maxV1 (goL2 min1 l1 min2 n2) r1 -- min2 is arbitrary here - we just need something from tree 2
+           | max1 > max2 -> Bin max1 maxV1 l1 (goR2 max1 r1 max2 (Bin min2 dummyV l2 r2))
+           | max1 < max2 -> case goR1 maxV1 max1 r1 max2 (Bin min2 dummyV l2 r2) of
+                Empty -> l1
+                NonEmpty max' maxV' r' -> Bin max' maxV' l1 r'
+           | otherwise -> case goRFused max1 r1 (Bin min2 dummyV l2 r2) of
+                Empty -> l1
+                NonEmpty max' maxV' r' -> Bin max' maxV' l1 r'
+    
+    goLFused min = loop
+      where
+        loop Tip !_ = Empty
+        loop (Bin max1 maxV1 l1 r1) Tip = case goDeleteMin max1 maxV1 l1 r1 of
+            DR min' minV' n' -> NonEmpty min' minV' n'
+        loop n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 _ l2 r2) = case compareMSB (xor min max1) (xor min max2) of
+            LT -> loop n1 l2
+            EQ | max1 > max2 -> binL (loop l1 l2) (NonEmpty max1 maxV1 (goR2 max1 r1 max2 r2))
+               | max1 < max2 -> binL (loop l1 l2) (goR1 maxV1 max1 r1 max2 r2)
+               | otherwise -> binL (loop l1 l2) (goRFused max1 r1 r2) -- we choose max1 arbitrarily, as max1 == max2
+            GT -> binL (loop l1 n2) (NonEmpty max1 maxV1 r1)
+    
+    goR1 maxV1 max1 Tip max2 n2 = goLookupR max1 maxV1 (xor max1 max2) n2
+    goR1 maxV1 max1 n1 _ Tip = NonEmpty max1 maxV1 n1
+    goR1 maxV1 max1 n1@(Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = NonEmpty max1 maxV1 n1
+    goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+        LT | xor min2 max1 > xor max1 max2 -> goR1 maxV1 max1 n1 max2 r2 -- max1 is arbitrary here - we just need something from tree 1
+           | min1 < min2 -> flipBounds $ NonEmpty min1 minV1 (goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2)
+           | min1 > min2 -> flipBounds $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | otherwise -> flipBounds $ goLFused min1 (Bin max1 maxV1 l1 r1) l2
+        EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (goR1 maxV1 max1 r1 max2 r2)
+           | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
+           | otherwise -> binR (goLFused min1 l1 l2) (goR1 maxV1 max1 r1 max2 r2)
+        GT -> binR (NonEmpty min1 minV1 l1) (goR1 maxV1 max1 r1 max2 n2)
+    
+    goR2 !_   Tip !_   !_  = Tip
+    goR2 max1 n1  max2 Tip = goDeleteR max2 (xor max1 max2) n1
+    goR2 _ n1@(Bin min1 _ _ _) max2 (Bin _ _ _ _) | min1 > max2 = n1
+    goR2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
+        LT -> goR2 max1 n1 max2 r2
+        EQ | min1 < min2 -> Bin min1 minV1 (goL2 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
+           | min1 > min2 -> case goL1 minV1 min1 l1 min2 l2 of
+                Empty -> goR2 max1 r1 max2 r2
+                NonEmpty min' minV' l' -> Bin min' minV' l' (goR2 max1 r1 max2 r2) 
+           | otherwise -> case goLFused min1 l1 l2 of
+                Empty -> goR2 max1 r1 max2 r2
+                NonEmpty min' minV' l' -> Bin min' minV' l' (goR2 max1 r1 max2 r2) 
+        GT | xor min1 max2 > xor max2 max1 -> Bin min1 minV1 l1 (goR2 max1 r1 max2 n2) -- max2 is arbitrary here - we just need something from tree 2
+           | min1 < min2 -> Bin min1 minV1 (goL2 min1 l1 min2 (Bin max2 dummyV l2 r2)) r1
+           | min1 > min2 -> case goL1 minV1 min1 l1 min2 (Bin max2 dummyV l2 r2) of
+                Empty -> r1
+                NonEmpty min' minV' l' -> Bin min' minV' l' r1
+           | otherwise -> case goLFused min1 l1 (Bin max2 dummyV l2 r2) of
+                Empty -> r1
+                NonEmpty min' minV' l' -> Bin min' minV' l' r1
+    
+    goRFused max = loop
+      where
+        loop Tip !_ = Empty
+        loop (Bin min1 minV1 l1 r1) Tip = case goDeleteMax min1 minV1 l1 r1 of
+            DR max' maxV' n' -> NonEmpty max' maxV' n'
+        loop n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
+            LT -> loop n1 r2
+            EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (loop r1 r2)
+               | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (loop r1 r2)
+               | otherwise -> binR (goLFused min1 r1 r2) (loop r1 r2) -- we choose min1 arbitrarily, as min1 == min2
+            GT -> binR (NonEmpty min1 minV1 l1) (loop r1 n2)
+    
+    goLookupL k v !_ Tip = NonEmpty k v Tip
+    goLookupL k v !xorCache (Bin max _ l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goLookupL k v xorCache l
+                    else goLookupR k v xorCacheMax r
+        | k > max = NonEmpty k v Tip
+        | otherwise = Empty
+      where xorCacheMax = xor k max
+    
+    goLookupR k v !_ Tip = NonEmpty k v Tip
+    goLookupR k v !xorCache (Bin min _ l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goLookupR k v xorCache r
+                    else goLookupL k v xorCacheMin l
+        | k < min = NonEmpty k v Tip
+        | otherwise = Empty
+      where xorCacheMin = xor min k
+    
+    goDeleteL _ !_           Tip = Tip
+    goDeleteL k !xorCache n@(Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then Bin max maxV (goDeleteL k xorCache l) r
+                    else Bin max maxV l (goDeleteR k xorCacheMax r)
+        | k > max = n
+        | otherwise = case r of
+            Tip -> l
+            Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                                    in  Bin max' maxV' l r'
+      where xorCacheMax = xor k max
+    
+    goDeleteR _ !_           Tip = Tip
+    goDeleteR k !xorCache n@(Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then Bin min minV l (goDeleteR k xorCache r)
+                    else Bin min minV (goDeleteL k xorCacheMin l) r
+        | k < min = n
+        | otherwise = case l of
+            Tip -> r
+            Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                                    in  Bin min' minV' l' r
+      where xorCacheMin = xor min k
+    
+    goDeleteMin max maxV l r = case l of
+        Tip -> case r of
+            Tip -> DR max maxV r
+            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
+        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
+                                in  DR min minV (Bin max maxV l' r)
+    
+    goDeleteMax min minV l r = case r of
+        Tip -> case l of
+            Tip -> DR min minV l
+            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
+        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
+                                in  DR max maxV (Bin min minV l r')
+    
+    dummyV = error "impossible"
 
 -- | /O(n+m)/. The (left-biased) intersection of two maps (based on keys).
 --

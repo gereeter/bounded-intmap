@@ -139,6 +139,16 @@ main = do
                 , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
+        , bgroup "difference"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (uncurry M.difference) (denseM, sparseM)
+                , bench "WordMap" $ whnf (uncurry W.difference) (denseW, sparseW)
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (uncurry M.difference) (sparseM, sparseM')
+                , bench "WordMap" $ whnf (uncurry W.difference) (sparseW, sparseW')
+                ]
+            ]
         , bgroup "intersection"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (uncurry M.intersection) (denseM, sparseM)

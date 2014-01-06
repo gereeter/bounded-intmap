@@ -1,7 +1,7 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only three types of function in the benchmark, `insert`, `intersection`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only four types of function in the benchmark, `insert`, `intersection`, `difference`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and even then `insert` is only slower if the key is not already present in the map.
 
 I deviate from the original implementation in a couple of ways:
 
@@ -248,9 +248,9 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `unionsWith`. Delegated, using lots of `unionWith`s.
 
 #### Difference
-* `difference`. Delegated, using `foldrWithKey'` and lots of `delete`s.
+* `difference`. Raw.
 * `differenceWith`. Delegated, using `differenceWithKey`.
-* `differenceWithKey`. Delegated, using `foldrWithKey'` and lots of `update`s.
+* `differenceWithKey`. Raw.
 
 #### Intersection
 * `intersection`. Raw. See note on `intersectionWithKey`.
