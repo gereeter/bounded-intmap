@@ -6,7 +6,7 @@ import Test.Tasty.HUnit
 import Data.Word
 import Data.WordMap
 
-import Prelude hiding (lookup, null)
+import Prelude hiding (lookup, null, filter, foldr, foldl, map)
 
 instance Function Word where
     function = functionMap (fromIntegral :: Word -> Int) fromIntegral
@@ -178,6 +178,201 @@ unitTests = testGroup "Unit Tests"
             , testCase "intersectionWith" $ intersectionWith (++) (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 5 "aA"
             , let f k al ar = (show k) ++ ":" ++ al ++ "|" ++ ar
               in testCase "intersectionWithKey" $ intersectionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) @?= singleton 5 "5:a|A"
+            ]
+        ]
+    , testGroup "Traversal"
+        [ testGroup "Map"
+            [ testCase "map" $ map (++ "x") (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "bx"), (5, "ax")]
+            , let f key x = (show key) ++ ":" ++ x
+              in testCase "mapWithKey" $ mapWithKey f (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "3:b"), (5, "5:a")]
+            , testGroup "traverseWithKey"
+                [ testCase "present" $ traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(1, 'a'), (5, 'e')]) @?= Just (fromList [(1, 'b'), (5, 'f')])
+                , testCase "absent" $ traverseWithKey (\k v -> if odd k then Just (succ v) else Nothing) (fromList [(2, 'c')]) @?= Nothing
+                ]
+            , let f a b = (a ++ b, b ++ "X")
+              in testCase "mapAccum" $ mapAccum f "Everything: " (fromList [(5,"a"), (3,"b")]) @?= ("Everything: ba", fromList [(3, "bX"), (5, "aX")])
+            , let f a k b = (a ++ " " ++ (show k) ++ "-" ++ b, b ++ "X")
+              in testCase "mapAccumWithKey" $ mapAccumWithKey f "Everything:" (fromList [(5,"a"), (3,"b")]) @?= ("Everything: 3-b 5-a", fromList [(3, "bX"), (5, "aX")])
+            -- NOTE: This isn't in the docs
+            , let f a k b = (a ++ " " ++ (show k) ++ "-" ++ b, b ++ "X")
+              in testCase "mapAccumRWithKey" $ mapAccumRWithKey f "Everything:" (fromList [(5,"a"), (3,"b")]) @?= ("Everything: 5-a 3-b", fromList [(3, "bX"), (5, "aX")])
+            , testGroup "mapKeys"
+                [ testCase "simple" $ mapKeys (+ 1) (fromList [(5,"a"), (3,"b")]) @?= fromList [(4, "b"), (6, "a")]
+                , testCase "collapse1" $ mapKeys (\ _ -> 1) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) @?= singleton 1 "c"
+                , testCase "collapse3" $ mapKeys (\ _ -> 3) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) @?= singleton 3 "c"
+                ]
+            , testGroup "mapKeysWith"
+                [ testCase "collapse1" $ mapKeysWith (++) (\ _ -> 1) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) @?= singleton 1 "cdab"
+                , testCase "collapse3" $ mapKeysWith (++) (\ _ -> 3) (fromList [(1,"b"), (2,"a"), (3,"d"), (4,"c")]) @?= singleton 3 "cdab"
+                ]
+            , testCase "mapKeysMonotonic" $ mapKeysMonotonic (\ k -> k * 2) (fromList [(5,"a"), (3,"b")]) @?= fromList [(6, "b"), (10, "a")]
+            ]
+        ]
+    , testGroup "Folds"
+        [ let f a len = len + (length a)
+          in testCase "foldr" $ foldr f 0 (fromList [(5,"a"), (3,"bbb")]) @?= 4
+        , let f len a = len + (length a)
+          in testCase "foldl" $ foldl f 0 (fromList [(5,"a"), (3,"bbb")]) @?= 4
+        , let f k a result = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+          in testCase "foldrWithKey" $ foldrWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) @?= "Map: (5:a)(3:b)"
+        , let f result k a = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+          in testCase "foldlWithKey" $ foldlWithKey f "Map: " (fromList [(5,"a"), (3,"b")]) @?= "Map: (3:b)(5:a)"
+        -- FIXME: foldMapWithKey
+        , testGroup "Strict folds" -- NOTE: These aren't in the docs
+            [ let f a len = len + (length a)
+              in testCase "foldr'" $ foldr' f 0 (fromList [(5,"a"), (3,"bbb")]) @?= 4
+            , let f len a = len + (length a)
+              in testCase "foldl'" $ foldl' f 0 (fromList [(5,"a"), (3,"bbb")]) @?= 4
+            , let f k a result = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+              in testCase "foldrWithKey'" $ foldrWithKey' f "Map: " (fromList [(5,"a"), (3,"b")]) @?= "Map: (5:a)(3:b)"
+            , let f result k a = result ++ "(" ++ (show k) ++ ":" ++ a ++ ")"
+              in testCase "foldlWithKey'" $ foldlWithKey' f "Map: " (fromList [(5,"a"), (3,"b")]) @?= "Map: (3:b)(5:a)"
+            ]
+        ]
+    , testGroup "Conversion"
+        [ testGroup "elems"
+            [ testCase "full" $ elems (fromList [(5,"a"), (3,"b")]) @?= ["b","a"]
+            , testCase "empty" $ elems empty @?= ([] :: [Char])
+            ]
+        , testGroup "keys"
+            [ testCase "full" $ keys (fromList [(5,"a"), (3,"b")]) @?= [3,5]
+            , testCase "empty" $ keys empty @?= ([] :: [Word])
+            ]
+        , testGroup "assocs"
+            [ testCase "full" $ assocs (fromList [(5,"a"), (3,"b")]) @?= [(3,"b"), (5,"a")]
+            , testCase "empty" $ assocs empty @?= ([] :: [(Word, Char)])
+            ]
+        -- TODO: keysSet (unimplemented)
+        -- TODO: fromSet (unimplemented)
+        , testGroup "Lists"
+            [ testGroup "toList"
+                [ testCase "full" $ toList (fromList [(5,"a"), (3,"b")]) @?= [(3,"b"), (5,"a")]
+                , testCase "empty" $ toList empty @?= ([] :: [(Word, Char)])
+                ]
+            , testGroup "fromList"
+                [ testCase "empty" $ fromList ([] :: [(Word, Char)]) @?= empty
+                , testCase "combine1" $ fromList [(5,"a"), (3,"b"), (5, "c")] @?= fromList [(5,"c"), (3,"b")]
+                , testCase "combine2" $ fromList [(5,"c"), (3,"b"), (5, "a")] @?= fromList [(5,"a"), (3,"b")]
+                ]
+            , testGroup "fromListWith"
+                [ testCase "full" $ fromListWith (++) [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"c")] @?= fromList [(3, "ab"), (5, "cba")]
+                , testCase "empty" $ fromListWith (++) ([] :: [(Word, String)]) @?= empty
+                ]
+            , let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+              in testGroup "fromListWithKey"
+                    [ testCase "full" $ fromListWithKey f [(5,"a"), (5,"b"), (3,"b"), (3,"a"), (5,"c")] @?= fromList [(3, "3:a|b"), (5, "5:c|5:b|a")]
+                    , testCase "empty" $ fromListWithKey f ([] :: [(Word, String)]) @?= empty
+                    ]
+            ]
+        , testGroup "Ordered lists"
+            [ testCase "toAscList" $ toAscList (fromList [(5,"a"), (3,"b")]) @?= [(3,"b"), (5,"a")]
+            , testCase "toDescList" $ toDescList (fromList [(5,"a"), (3,"b")]) @?= [(5,"a"), (3,"b")]
+            , testGroup "fromAscList"
+                [ testCase "simple" $ fromAscList [(3,"b"), (5,"a")] @?= fromList [(3, "b"), (5, "a")]
+                , testCase "combine" $ fromAscList [(3,"b"), (5,"a"), (5,"b")] @?= fromList [(3, "b"), (5, "b")]
+                ]
+            , testCase "fromAscListWith" $ fromAscListWith (++) [(3,"b"), (5,"a"), (5,"b")] @?= fromList [(3, "b"), (5, "ba")]
+            , let f key new_value old_value = (show key) ++ ":" ++ new_value ++ "|" ++ old_value
+              in testCase "fromAscListWithKey" $ fromAscListWithKey f [(3,"b"), (5,"a"), (5,"b")] @?= fromList [(3, "b"), (5, "5:b|a")]
+            , testCase "fromDistinctAscList" $ fromDistinctAscList [(3,"b"), (5,"a")] @?= fromList [(3, "b"), (5, "a")]
+            ]
+        ]
+    , testGroup "Filter"
+        [ testGroup "filter"
+            [ testCase "some" $ filter (> "a") (fromList [(5,"a"), (3,"b")]) @?= singleton 3 "b"
+            , testCase "none1" $ filter (> "x") (fromList [(5,"a"), (3,"b")]) @?= empty
+            , testCase "none2" $ filter (< "a") (fromList [(5,"a"), (3,"b")]) @?= empty
+            ]
+        , testCase "filterWithKey" $ filterWithKey (\k _ -> k > 4) (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "a"
+        , testGroup "partition"
+            [ testCase "split" $ partition (> "a") (fromList [(5,"a"), (3,"b")]) @?= (singleton 3 "b", singleton 5 "a")
+            , testCase "allL" $ partition (< "x") (fromList [(5,"a"), (3,"b")]) @?= (fromList [(3, "b"), (5, "a")], empty)
+            , testCase "allR" $ partition (> "x") (fromList [(5,"a"), (3,"b")]) @?= (empty, fromList [(3, "b"), (5, "a")])
+            ]
+        , testGroup "partitionWithKey"
+            [ testCase "split" $ partitionWithKey (\ k _ -> k > 3) (fromList [(5,"a"), (3,"b")]) @?= (singleton 5 "a", singleton 3 "b")
+            , testCase "allL" $ partitionWithKey (\ k _ -> k < 7) (fromList [(5,"a"), (3,"b")]) @?= (fromList [(3, "b"), (5, "a")], empty)
+            , testCase "allR" $ partitionWithKey (\ k _ -> k > 7) (fromList [(5,"a"), (3,"b")]) @?= (empty, fromList [(3, "b"), (5, "a")])
+            ]
+        , let f x = if x == "a" then Just "new a" else Nothing
+          in testCase "mapMaybe" $ mapMaybe f (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "new a"
+        , let f k _ = if k < 5 then Just ("key : " ++ (show k)) else Nothing
+          in testCase "mapMaybeWithKey" $ mapMaybeWithKey f (fromList [(5,"a"), (3,"b")]) @?= singleton 3 "key : 3"
+        , let f a = if a < "c" then Left a else Right a
+          in testGroup "mapEither"
+                [ testCase "split" $ mapEither f (fromList [(5,"a"), (3,"b"), (1,"x"), (7,"z")]) @?= (fromList [(3,"b"), (5,"a")], fromList [(1,"x"), (7,"z")])
+                , testCase "allR" $ mapEither (\ a -> Right a) (fromList [(5,"a"), (3,"b"), (1,"x"), (7,"z")]) @?= (empty :: WordMap String, fromList [(5,"a"), (3,"b"), (1,"x"), (7,"z")])
+                ]
+        , let f k a = if k < 5 then Left (k * 2) else Right (a ++ a)
+          in testGroup "mapEitherWithKey"
+                [ testCase "split" $ mapEitherWithKey f (fromList [(5,"a"), (3,"b"), (1,"x"), (7,"z")]) @?= (fromList [(1,2), (3,6)], fromList [(5,"aa"), (7,"zz")])
+                , testCase "allR" $ mapEitherWithKey (\_ a -> Right a) (fromList [(5,"a"), (3,"b"), (1,"x"), (7,"z")]) @?= (empty :: WordMap String, fromList [(1,"x"), (3,"b"), (5,"a"), (7,"z")])
+                ]
+        , testGroup "split"
+            [ testCase "allR" $ split 2 (fromList [(5,"a"), (3,"b")]) @?= (empty, fromList [(3,"b"), (5,"a")])
+            , testCase "allR (del)" $ split 3 (fromList [(5,"a"), (3,"b")]) @?= (empty, singleton 5 "a")
+            , testCase "split" $ split 4 (fromList [(5,"a"), (3,"b")]) @?= (singleton 3 "b", singleton 5 "a")
+            , testCase "allL (del)" $ split 5 (fromList [(5,"a"), (3,"b")]) @?= (singleton 3 "b", empty)
+            , testCase "allL" $ split 6 (fromList [(5,"a"), (3,"b")]) @?= (fromList [(3,"b"), (5,"a")], empty)
+            ]
+        , testGroup "splitLookup"
+            [ testCase "allR" $ splitLookup 2 (fromList [(5,"a"), (3,"b")]) @?= (empty, Nothing, fromList [(3,"b"), (5,"a")])
+            , testCase "allR (del)" $ splitLookup 3 (fromList [(5,"a"), (3,"b")]) @?= (empty, Just "b", singleton 5 "a")
+            , testCase "split" $ splitLookup 4 (fromList [(5,"a"), (3,"b")]) @?= (singleton 3 "b", Nothing, singleton 5 "a")
+            , testCase "allL (del)" $ splitLookup 5 (fromList [(5,"a"), (3,"b")]) @?= (singleton 3 "b", Just "a", empty)
+            , testCase "allL" $ splitLookup 6 (fromList [(5,"a"), (3,"b")]) @?= (fromList [(3,"b"), (5,"a")], Nothing, empty)
+            ]
+        ]
+    , testGroup "Submap"
+        [ testGroup "isSubmapOf" -- NOTE: These are not in the docs
+            [ testCase "true1" $ isSubmapOf (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "true3" $ isSubmapOf (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "false1" $ isSubmapOf (fromList [(1,2)]) (fromList [(1,1),(2,2)]) @?= False
+            , testCase "false3" $ isSubmapOf (fromList [(1,1),(2,2)]) (fromList [(1,1)]) @?= False
+            ]
+        , testGroup "isSubmapOfBy"
+            [ testCase "true1" $ isSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "true2" $ isSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "true3" $ isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "false1" $ isSubmapOfBy (==) (fromList [(1,2)]) (fromList [(1,1),(2,2)]) @?= False
+            , testCase "false2" $ isSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= False
+            , testCase "false3" $ isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)]) @?= False
+            ]
+        ]
+        -- TODO: isProperSubmapOf (unimplemented)
+        -- TODO: isProperSubmapOfBy (unimplemented)
+    , testGroup "MinMax"
+        -- FIXME: findMin
+        -- FIXME: findMax
+        -- FIXME: deleteMin
+        -- FIXME: deleteMax
+        -- FIXME: deleteFindMin
+        -- FIXME: deleteFindMax
+        [ testGroup "updateMin"
+            [ testCase "adjust" $ updateMin (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "Xb"), (5, "a")]
+            , testCase "delete" $ updateMin (\ _ -> Nothing) (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "a"
+            ]
+        , testGroup "updateMax"
+            [ testCase "adjust" $ updateMax (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) @?= fromList [(3, "b"), (5, "Xa")]
+            , testCase "delete" $ updateMax (\ _ -> Nothing) (fromList [(5,"a"), (3,"b")]) @?= singleton 3 "b"
+            ]
+        , testGroup "updateMinWithKey"
+            [ testCase "adjust" $ updateMinWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) @?= fromList [(3,"3:b"), (5,"a")]
+            , testCase "delete" $ updateMinWithKey (\ _ _ -> Nothing) (fromList [(5,"a"), (3,"b")]) @?= singleton 5 "a"
+            ]
+        , testGroup "updateMaxWithKey"
+            [ testCase "adjust" $ updateMaxWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) @?= fromList [(3,"b"), (5,"5:a")]
+            , testCase "delete" $ updateMaxWithKey (\ _ _ -> Nothing) (fromList [(5,"a"), (3,"b")]) @?= singleton 3 "b"
+            ]
+        -- FIXME: minView
+        -- FIXME: maxView
+        , testGroup "minViewWithKey"
+            [ testCase "full" $ minViewWithKey (fromList [(5,"a"), (3,"b")]) @?= Just ((3,"b"), singleton 5 "a")
+            , testCase "empty" $ minViewWithKey (empty :: WordMap String) @?= Nothing
+            ]
+        , testGroup "mapViewWithKey"
+            [ testCase "full" $ maxViewWithKey (fromList [(5,"a"), (3,"b")]) @?= Just ((5,"a"), singleton 3 "b")
+            , testCase "empty" $ maxViewWithKey (empty :: WordMap String) @?= Nothing
             ]
         ]
     ]
