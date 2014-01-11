@@ -73,7 +73,7 @@ module Data.WordMap.Strict (
     , mapKeysWith
     , mapKeysMonotonic
     
-    -- ** Folds
+    -- * Folds
     , foldr
     , foldl
     , foldrWithKey
@@ -132,6 +132,10 @@ module Data.WordMap.Strict (
     , maxView
     , minViewWithKey
     , maxViewWithKey
+    
+    -- * Submap
+    , isSubmapOf
+    , isSubmapOfBy
     
     -- * Debugging
     , showTree
