@@ -169,6 +169,14 @@ main = do
                 , bench "WordMap" $ whnf (uncurry (W.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
+        , bgroup "fromList"
+            [ bench "IntMap"  $ whnf M.fromList elems
+            , bench "WordMap" $ whnf W.fromList elems
+            ]
+        , bgroup "fromAscList"
+            [ bench "IntMap"  $ whnf M.fromAscList elems
+            , bench "WordMap" $ whnf W.fromAscList elems
+            ]
         ]
   where
     elems = zip keys values
