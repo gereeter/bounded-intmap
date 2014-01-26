@@ -19,10 +19,10 @@ module Data.IntMap.Bounded.Strict (
     , notMember
     , lookup
     , findWithDefault
-{-    , lookupLT
+    , lookupLT
     , lookupGT
     , lookupLE
-    , lookupGE-}
+    , lookupGE
     
     -- * Construction
     , empty

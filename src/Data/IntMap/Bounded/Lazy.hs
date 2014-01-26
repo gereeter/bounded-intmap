@@ -19,10 +19,10 @@ module Data.IntMap.Bounded.Lazy (
     , notMember
     , lookup
     , findWithDefault
-{-    , lookupLT
+    , lookupLT
     , lookupGT
     , lookupLE
-    , lookupGE-}
+    , lookupGE
     
     -- * Construction
     , empty

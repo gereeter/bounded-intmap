@@ -102,7 +102,7 @@ lookup k (IntMap m) = W.lookup (i2w k) m
 -- of the map. 
 findWithDefault :: a -> Key -> IntMap a -> a
 findWithDefault def k (IntMap m) = W.findWithDefault def (i2w k) m
-{-
+
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
 --
@@ -112,40 +112,41 @@ lookupLT :: Key -> IntMap a -> Maybe (Key, a)
 lookupLT k = k `seq` start
   where
     start (IntMap Empty) = Nothing
-    start (IntMap (NonEmtpy min minV Tip))
-        | w2i min < k = Just (min, minV)
+    start (IntMap (NonEmpty min minV Tip))
+        | w2i min < k = Just (w2i min, minV)
         | otherwise = Nothing
-    start (NonEmpty min minV (Bin max maxV l r))
+    start (IntMap (NonEmpty min minV node@(Bin max maxV l r)))
         | w2i (xor min max) < 0 =
-            if w2i min < k
-            then goL (xor min k) min minV l
-            else if max < i2w k
-                 then Just (max, maxV)
+            if w2i min < k -- if this is true, we know the result is positive
+            then Just (goL (xor min (i2w k)) min minV l)
+            else if w2i max < k -- if this is true, k is between the positives and negatives
+                 then Just (w2i max, maxV)
                  else case r of
                         Tip -> Nothing
-                        Bin minI minVI lI rI | minI >= i2w k -> Nothing
-                                             | xor minI k < xor k max -> goL 
-        | min < i2w k = Just (goL (xor min k) min minV node)
+                        Bin minI minVI lI rI
+                            | minI >= i2w k -> Nothing
+                            | otherwise -> Just (goL (xor minI (i2w k)) minI minVI (Bin max maxV lI rI))
+        | min < i2w k = Just (goL (xor min (i2w k)) min minV node)
         | otherwise = Nothing
     
-    goL !_ min minV Tip = (min, minV)
+    goL !_ min minV Tip = (w2i min, minV)
     goL !xorCache min minV (Bin max maxV l r)
-        | max < k = (max, maxV)
+        | max < i2w k = (w2i max, maxV)
         | xorCache < xorCacheMax = goL xorCache min minV l
         | otherwise = goR xorCacheMax r min minV l
       where
-        xorCacheMax = xor k max
+        xorCacheMax = xor (i2w k) max
     
     goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
     goR !xorCache (Bin min minV l r) fMin fMinV fallback
-        | min >= k = getMax fMin fMinV fallback
+        | min >= i2w k = getMax fMin fMinV fallback
         | xorCache < xorCacheMin = goR xorCache r min minV l
         | otherwise = goL xorCacheMin min minV l
       where
-        xorCacheMin = xor min k
+        xorCacheMin = xor min (i2w k)
     
-    getMax min minV Tip = (min, minV)
-    getMax _   _   (Bin max maxV _ _) = (max, maxV)
+    getMax min minV Tip = (w2i min, minV)
+    getMax _   _   (Bin max maxV _ _) = (w2i max, maxV)
 
 -- | /O(log n)/. Find largest key smaller or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -154,9 +155,44 @@ lookupLT k = k `seq` start
 -- > lookupLE 4 (fromList [(3,'a'), (5,'b')]) == Just (3, 'a')
 -- > lookupLE 5 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
 lookupLE :: Key -> IntMap a -> Maybe (Key, a)
-lookupLE k (IntMap m) = case W.lookupLE (i2w k) m of
-    Nothing -> Nothing
-    Just (k', v) -> Just (w2i k', v)
+lookupLE k = k `seq` start
+  where
+    start (IntMap Empty) = Nothing
+    start (IntMap (NonEmpty min minV Tip))
+        | w2i min <= k = Just (w2i min, minV)
+        | otherwise = Nothing
+    start (IntMap (NonEmpty min minV node@(Bin max maxV l r)))
+        | w2i (xor min max) < 0 =
+            if w2i min <= k -- if this is true, we know the result is positive
+            then Just (goL (xor min (i2w k)) min minV l)
+            else if w2i max <= k -- if this is true, k is between the positives and negatives
+                 then Just (w2i max, maxV)
+                 else case r of
+                        Tip -> Nothing
+                        Bin minI minVI lI rI
+                            | minI > i2w k -> Nothing
+                            | otherwise -> Just (goL (xor minI (i2w k)) minI minVI (Bin max maxV lI rI))
+        | min <= i2w k = Just (goL (xor min (i2w k)) min minV node)
+        | otherwise = Nothing
+    
+    goL !_ min minV Tip = (w2i min, minV)
+    goL !xorCache min minV (Bin max maxV l r)
+        | max <= i2w k = (w2i max, maxV)
+        | xorCache < xorCacheMax = goL xorCache min minV l
+        | otherwise = goR xorCacheMax r min minV l
+      where
+        xorCacheMax = xor (i2w k) max
+    
+    goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !xorCache (Bin min minV l r) fMin fMinV fallback
+        | min > i2w k = getMax fMin fMinV fallback
+        | xorCache < xorCacheMin = goR xorCache r min minV l
+        | otherwise = goL xorCacheMin min minV l
+      where
+        xorCacheMin = xor min (i2w k)
+    
+    getMax min minV Tip = (w2i min, minV)
+    getMax _   _   (Bin max maxV _ _) = (w2i max, maxV)
 
 -- | /O(log n)/. Find smallest key greater than the given one and return the
 -- corresponding (key, value) pair.
@@ -164,9 +200,44 @@ lookupLE k (IntMap m) = case W.lookupLE (i2w k) m of
 -- > lookupGT 4 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
 -- > lookupGT 5 (fromList [(3,'a'), (5,'b')]) == Nothing
 lookupGT :: Key -> IntMap a -> Maybe (Key, a)
-lookupGT k (IntMap m) = case W.lookupGT (i2w k) m of
-    Nothing -> Nothing
-    Just (k', v) -> Just (w2i k', v)
+lookupGT k = k `seq` start
+  where
+    start (IntMap Empty) = Nothing
+    start (IntMap (NonEmpty min minV Tip))
+        | w2i min > k = Just (w2i min, minV)
+        | otherwise = Nothing
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | w2i (xor min max) < 0 =
+            if w2i max > k -- if this is true, we know the result is negative
+            then Just (goR (xor (i2w k) max) max maxV r)
+            else if w2i min > k -- if this is true, k is between the positives and negatives
+                 then Just (w2i min, minV)
+                 else case l of
+                        Tip -> Nothing
+                        Bin maxI maxVI lI rI
+                            | maxI <= i2w k -> Nothing
+                            | otherwise -> Just (goR (xor (i2w k) maxI) maxI maxVI (Bin min minV lI rI))
+        | max > i2w k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
+        | otherwise = Nothing
+    
+    goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
+    goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
+        | max <= i2w k = getMin fMax fMaxV fallback
+        | xorCache < xorCacheMax = goL xorCache l max maxV r
+        | otherwise = goR xorCacheMax max maxV r
+      where
+        xorCacheMax = xor (i2w k) max
+    
+    goR !_ max maxV Tip = (w2i max, maxV)
+    goR !xorCache max maxV (Bin min minV l r)
+        | min > i2w k = (w2i min, minV)
+        | xorCache < xorCacheMin = goR xorCache max maxV r
+        | otherwise = goL xorCacheMin l max maxV r
+      where
+        xorCacheMin = xor min (i2w k)
+    
+    getMin max maxV Tip = (w2i max, maxV)
+    getMin _   _   (Bin min minV _ _) = (w2i min, minV)
 
 -- | /O(log n)/. Find smallest key greater or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -175,10 +246,45 @@ lookupGT k (IntMap m) = case W.lookupGT (i2w k) m of
 -- > lookupGE 4 (fromList [(3,'a'), (5,'b')]) == Just (5, 'b')
 -- > lookupGE 6 (fromList [(3,'a'), (5,'b')]) == Nothing
 lookupGE :: Key -> IntMap a -> Maybe (Key, a)
-lookupGE k (IntMap m) = case W.lookupGE (i2w k) m of
-    Nothing -> Nothing
-    Just (k', v) -> Just (w2i k', v)
--}
+lookupGE k = k `seq` start
+  where
+    start (IntMap Empty) = Nothing
+    start (IntMap (NonEmpty min minV Tip))
+        | w2i min >= k = Just (w2i min, minV)
+        | otherwise = Nothing
+    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        | w2i (xor min max) < 0 =
+            if w2i max >= k -- if this is true, we know the result is negative
+            then Just (goR (xor (i2w k) max) max maxV r)
+            else if w2i min >= k -- if this is true, k is between the positives and negatives
+                 then Just (w2i min, minV)
+                 else case l of
+                        Tip -> Nothing
+                        Bin maxI maxVI lI rI
+                            | maxI < i2w k -> Nothing
+                            | otherwise -> Just (goR (xor (i2w k) maxI) maxI maxVI (Bin min minV lI rI))
+        | max >= i2w k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
+        | otherwise = Nothing
+    
+    goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
+    goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
+        | max < i2w k = getMin fMax fMaxV fallback
+        | xorCache < xorCacheMax = goL xorCache l max maxV r
+        | otherwise = goR xorCacheMax max maxV r
+      where
+        xorCacheMax = xor (i2w k) max
+    
+    goR !_ max maxV Tip = (w2i max, maxV)
+    goR !xorCache max maxV (Bin min minV l r)
+        | min >= i2w k = (w2i min, minV)
+        | xorCache < xorCacheMin = goR xorCache max maxV r
+        | otherwise = goL xorCacheMin l max maxV r
+      where
+        xorCacheMin = xor min (i2w k)
+    
+    getMin max maxV Tip = (w2i max, maxV)
+    getMin _   _   (Bin min minV _ _) = (w2i min, minV)
+
 -- | /O(1)/. The empty map.
 empty :: IntMap a
 empty = IntMap W.empty
