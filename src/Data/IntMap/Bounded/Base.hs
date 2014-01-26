@@ -102,16 +102,50 @@ lookup k (IntMap m) = W.lookup (i2w k) m
 -- of the map. 
 findWithDefault :: a -> Key -> IntMap a -> a
 findWithDefault def k (IntMap m) = W.findWithDefault def (i2w k) m
-{- FIXME: Implement these properly.
+{-
 -- | /O(log n)/. Find largest key smaller than the given one and return the
 -- corresponding (key, value) pair.
 --
 -- > lookupLT 3 (fromList [(3,'a'), (5,'b')]) == Nothing
 -- > lookupLT 4 (fromList [(3,'a'), (5,'b')]) == Just (3, 'a')
 lookupLT :: Key -> IntMap a -> Maybe (Key, a)
-lookupLT k (IntMap m) = case W.lookupLT (i2w k) m of
-    Nothing -> Nothing
-    Just (k', v) -> Just (w2i k', v)
+lookupLT k = k `seq` start
+  where
+    start (IntMap Empty) = Nothing
+    start (IntMap (NonEmtpy min minV Tip))
+        | w2i min < k = Just (min, minV)
+        | otherwise = Nothing
+    start (NonEmpty min minV (Bin max maxV l r))
+        | w2i (xor min max) < 0 =
+            if w2i min < k
+            then goL (xor min k) min minV l
+            else if max < i2w k
+                 then Just (max, maxV)
+                 else case r of
+                        Tip -> Nothing
+                        Bin minI minVI lI rI | minI >= i2w k -> Nothing
+                                             | xor minI k < xor k max -> goL 
+        | min < i2w k = Just (goL (xor min k) min minV node)
+        | otherwise = Nothing
+    
+    goL !_ min minV Tip = (min, minV)
+    goL !xorCache min minV (Bin max maxV l r)
+        | max < k = (max, maxV)
+        | xorCache < xorCacheMax = goL xorCache min minV l
+        | otherwise = goR xorCacheMax r min minV l
+      where
+        xorCacheMax = xor k max
+    
+    goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
+    goR !xorCache (Bin min minV l r) fMin fMinV fallback
+        | min >= k = getMax fMin fMinV fallback
+        | xorCache < xorCacheMin = goR xorCache r min minV l
+        | otherwise = goL xorCacheMin min minV l
+      where
+        xorCacheMin = xor min k
+    
+    getMax min minV Tip = (min, minV)
+    getMax _   _   (Bin max maxV _ _) = (max, maxV)
 
 -- | /O(log n)/. Find largest key smaller or equal to the given one and return
 -- the corresponding (key, value) pair.
@@ -495,6 +529,31 @@ split k (IntMap m) = let (m1, m2) = W.split (i2w k) m in (IntMap m1, IntMap m2)
 splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
 splitLookup k (IntMap m) = let (m1, mv, m2) = W.splitLookup (i2w k) m in (IntMap m1, mv IntMap m2)
 -}
+
+-- | /O(n+m)/. Is this a submap?
+-- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
+isSubmapOf :: Eq a => IntMap a -> IntMap a -> Bool
+IntMap m1 `isSubmapOf` IntMap m2 = m1 `W.isSubmapOf` m2
+
+{- | /O(n+m)/.
+ The expression (@'isSubmapOfBy' f m1 m2@) returns 'True' if
+ all keys in @m1@ are in @m2@, and when @f@ returns 'True' when
+ applied to their respective values. For example, the following
+ expressions are all 'True':
+
+  > isSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+  > isSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+  > isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)])
+
+ But the following are all 'False':
+
+  > isSubmapOfBy (==) (fromList [(1,2)]) (fromList [(1,1),(2,2)])
+  > isSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+  > isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)])
+-}
+isSubmapOfBy :: (a -> b -> Bool) -> IntMap a -> IntMap b -> Bool
+isSubmapOfBy f (IntMap m1) (IntMap m2) = W.isSubmapOfBy f m1 m2
+
 -- | /O(1)/. The minimal key of the map.
 findMin :: IntMap a -> (Key, a)
 findMin (IntMap Empty) = error "findMin: empty map has no minimal element"

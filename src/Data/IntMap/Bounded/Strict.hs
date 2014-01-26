@@ -117,6 +117,10 @@ module Data.IntMap.Bounded.Strict (
 {-    , split
     , splitLookup-}
     
+    -- * Submap
+    , isSubmapOf
+    , isSubmapOfBy
+    
     -- * Min\/Max
     , findMin
     , findMax

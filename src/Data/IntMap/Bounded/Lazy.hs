@@ -117,6 +117,10 @@ module Data.IntMap.Bounded.Lazy (
 {-    , split
     , splitLookup-}
     
+    -- * Submap
+    , isSubmapOf
+    , isSubmapOfBy
+    
     -- * Min\/Max
     , findMin
     , findMax
