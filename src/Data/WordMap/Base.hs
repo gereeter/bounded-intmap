@@ -1363,7 +1363,7 @@ isSubmapOfBy p = start
     
     goL minV1 min1 Tip min2 n2 = goLookupL min1 minV1 (xor min1 min2) n2
     goL _     _    _   _    Tip = False
-    goL minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2)
+    goL minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 (Bin max2 maxV2 l2 r2)
         | max1 > max2 = False
         | max1 < max2 = case xor min1 max1 `ltMSB` xor min2 max2 of
             True | xor min2 min1 < xor min1 max2 -> goL minV1 min1 n1 min2 l2 -- LT
@@ -1375,7 +1375,7 @@ isSubmapOfBy p = start
     
     goLFused _ Tip _ = True
     goLFused _ _ Tip = False
-    goLFused min n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 maxV2 l2 r2)
+    goLFused min n1@(Bin max1 maxV1 l1 r1) (Bin max2 maxV2 l2 r2)
         | max1 > max2 = False
         | max1 < max2 = case xor min max1 `ltMSB` xor min max2 of
             True -> goLFused min n1 l2
@@ -1384,7 +1384,7 @@ isSubmapOfBy p = start
     
     goR maxV1 max1 Tip max2 n2 = goLookupR max1 maxV1 (xor max1 max2) n2
     goR _     _    _   _    Tip = False
-    goR maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2)
+    goR maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 (Bin min2 minV2 l2 r2)
         | min1 < min2 = False
         | min1 > min2 = case xor min1 max1 `ltMSB` xor min2 max2 of
             True | xor min2 max1 > xor max1 max2 -> goR maxV1 max1 n1 max2 r2 -- LT
@@ -1396,14 +1396,14 @@ isSubmapOfBy p = start
     
     goRFused _ Tip _ = True
     goRFused _ _ Tip = False
-    goRFused max n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 minV2 l2 r2)
+    goRFused max n1@(Bin min1 minV1 l1 r1) (Bin min2 minV2 l2 r2)
         | min1 < min2 = False
         | min1 > min2 = case xor min1 max `ltMSB` xor min2 max of
             True -> goRFused max n1 r2
             False -> goL minV1 min1 l1 min2 l2 && goRFused max r1 r2 -- EQ
         | otherwise = p minV1 minV2 && goLFused min1 l1 l2 && goRFused max r1 r2
     
-    goLookupL k v !_ Tip = False
+    goLookupL _ _ !_ Tip = False
     goLookupL k v !xorCache (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then goLookupL k v xorCache l
@@ -1412,7 +1412,7 @@ isSubmapOfBy p = start
         | otherwise = p v maxV
       where xorCacheMax = xor k max
     
-    goLookupR k v !_ Tip = False
+    goLookupR _ _ !_ Tip = False
     goLookupR k v !xorCache (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then goLookupR k v xorCache r
