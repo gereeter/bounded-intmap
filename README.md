@@ -1,9 +1,9 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 50% slower than stock `Data.IntMap`. Note that only five types of function in the benchmark, `insert`, `intersection`, `difference`, `fromAscList`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and not all of these are slower in all cases.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 33% slower than stock `Data.IntMap`. However, only five types of function in the benchmark, `insert`, `intersection`, `difference`, `fromAscList`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and not all of these are slower in all cases. In comparison, `lookup`, `member`, `map`, `mapMaybe`, `delete`, `update`, and `union` are all faster than stock `Data.IntMap`. Additionally, this implementation, on GHC, has an overhead of 3 words per key\/value pair, while stock `Data.IntMap` has an overhead of 6 words per key\/value pair.
 
-I deviate from the original implementation in a couple of ways:
+I deviate from Edward Kmett's implementation in a couple of ways:
 
 * I removed the redundant encoding of bounds. Previously, you might have a tree like this:
 
@@ -25,6 +25,161 @@ I deviate from the original implementation in a couple of ways:
 
 * I factored the datatype into two pieces: `Node` for non-empty trees, and `WordMap` for possibly empty trees.
 * I cache some of the computation for locating a key as I traverse the key, making it quicker to decide which way to go.
+* The values associated with each key are stored with the key instead of at the leaves.
+
+Benchmark Results
+-----------------
+The criterion report is [here](http://gereeter.github.io/bounded-intmap/report.html).
+
+Current Progress
+----------------
+Below is a listing of every function in stock `Data.IntMap`, along with the implementation state in `bounded-intmap`. There are three implementation states:
+
+* Raw means that I have implemented the function directly. These functions should be on par with or faster than their corresponding functions in stock `Data.IntMap`.
+* Delegated means that I have implemented the function, but in terms of other functions. This usually means that it will be slower than stock `Data.IntMap`, sometimes asymptotically, and I haven't figured out how to implement it (or implement it nicely) yet. Note that some functions marked as such, like `insertWithKey`, are trivial uses of other functions are should have almost no performance hit.
+* Unimplemented means that I have yet to implement the function in any form.
+
+### Operators
+* `(!)`. Delegated, using `findWithDefault`.
+* `(\\)`. Delegated, using `difference`.
+
+### Query
+* `null`. Raw.
+* `size`. Raw.
+* `member`. Raw.
+* `notMember`. Raw.
+* `lookup`. Raw.
+* `findWithDefault`. Raw.
+* `lookupLT`. Raw.
+* `lookupGT`. Raw.
+* `lookupLE`. Raw.
+* `lookupGE`. Raw.
+
+### Construction
+* `empty`. Raw.
+* `singleton`. Raw.
+
+#### Insertion
+* `insert`. Raw.
+* `insertWith`. Raw.
+* `insertWithKey`. Delegated, using `insertWith`.
+* `insertLookupWithKey`. Raw.
+
+#### Delete/Update
+* `delete`. Raw.
+* `adjust`. Raw.
+* `adjustWithkey`. Delegated, using `adjust`.
+* `update`. Raw.
+* `updateWithKey`. Delegated, using `update`.
+* `updateLookupWithKey`. Raw.
+* `alter`. Delegated, using `member` and either `update` or `insert`.
+
+### Combine
+#### Union
+* `union`. Raw.
+* `unionWith`. Delegated, using `unionWithKey`.
+* `unionWithKey`. Raw.
+* `unions`. Delegated, using lots of `union`s.
+* `unionsWith`. Delegated, using lots of `unionWith`s.
+
+#### Difference
+* `difference`. Raw.
+* `differenceWith`. Delegated, using `differenceWithKey`.
+* `differenceWithKey`. Raw.
+
+#### Intersection
+* `intersection`. Raw. See note on `intersectionWithKey`.
+* `intersectionWith`. Delegated, using `intersectionWithKey`.
+* `intersectionWithKey`. Raw. Note that it is still slower than stock `Data.IntMap` by up to (though not necessarily) 50%.
+
+#### Universal combining function
+* `mergeWithKey`. _Unimplemented_. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.
+
+### Traversal
+#### Map
+* `map`. Raw. Actually, this is sort of delegated to `fmap`, but since the delegation is just `map = fmap` and will probably be inlined, I count this as raw.
+* `mapWithKey`. Raw.
+* `traverseWithKey`. Raw.
+* `mapAccum`. Delegated, using `mapAccumWithKey`.
+* `mapAccumWithKey`. Raw.
+* `mapAccumRWithKey`. Raw.
+* `mapKeys`. Delegated, using `foldrWithKey'` and lots of `insert`s.
+* `mapKeysWith`. Delegated, using `foldrWithKey'` and lots of `insertWith`s.
+* `mapKeysMonotonic`. Delegated, using `mapKeys`.
+
+#### Folds
+* `foldr`. Raw.
+* `foldl`. Raw.
+* `foldrWithKey`. Raw.
+* `foldlWithKey`. Raw.
+* `foldMapWithKey`. Raw.
+
+#### Strict folds
+* `foldr'`. Raw.
+* `foldl'`. Raw.
+* `foldrWithKey'`. Raw.
+* `foldlWithKey'`. Raw.
+
+### Conversion
+* `elems`. Delegated, using `foldr`.
+* `keys`. Delegated, using `foldrWithKey`.
+* `assocs`. Delegated, using `toAscList`.
+* `keysSet`. _Unimplemented_. Note that I'm not sure whether to convert to stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
+* `fromSet`. _Unimplemented_. Note that I'm not sure whether to convert from stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
+
+#### Lists
+* `toList`. Delegated, using `toAscList`.
+* `fromList`. Delegated, using lots of `insert`s.
+* `fromListWith`. Delegated, using lots of `insert`s.
+* `fromListWithKey`. Delegated, using lots of `insert`s.
+
+#### Ordered lists
+* `toAscList`. Delegated, using `foldrWithKey`.
+* `toDescList`. Delegated, using `foldlWithKey`.
+* `fromAscList`. Delegated, using `fromList`.
+* `fromAscListWith`. Delegated, using `fromListWith`.
+* `fromAscListWithKey`. Delegated, using `fromListWithKey`.
+* `fromDistinctAscList`. Delegated, using `fromList`.
+
+### Filter
+* `filter`. Delegated, using `filterWithKey`.
+* `filterWithKey`. Raw.
+* `partition`. Delegated, using `partitionWithKey`.
+* `partitionWithKey`. Raw.
+* `mapMaybe`. Delegated, using `mapMaybeWithKey`.
+* `mapMaybeWithKey`. Raw.
+* `mapEither`. Delegated, using `mapEitherWithKey`.
+* `mapEitherWithKey`. Raw.
+* `split`. Delegated, using `splitLookup`.
+* `splitLookup`. Raw.
+* `splitRoot`. _Unimplemented_.
+
+### Submap
+* `isSubmapOf`. Delegated, using `isSubmapOfBy`.
+* `isSubmapOfBy`. Raw.
+* `isProperSubmapOf`. _Unimplemented_
+* `isProperSubmapOfBy`. _Unimplemented_.
+
+### Min/Max
+* `findMin`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
+* `findMax`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
+* `deleteMin`. Delegated, using `findMin` and `delete`.
+* `deleteMax`. Delegated, using `findMin` and `delete`.
+* `deleteFindMin`. Delegated, using `findMin` and `delete`.
+* `deleteFindMax`. Delegated, using `findMin` and `delete`.
+* `updateMin`. Delegated, using `findMin` and `update`.
+* `updateMax`. Delegated, using `findMin` and `update`.
+* `updateMinWithKey`. Delegated, using `findMin` and `updateWithKey`.
+* `updateMaxWithKey`. Delegated, using `findMin` and `updateWithKey`.
+* `minView`. Delegated, using `findMin` and `delete`.
+* `maxView`. Delegated, using `findMin` and `delete`.
+* `minViewWithKey`. Delegated, using `findMin` and `delete`.
+* `maxViewWithKey`. Delegated, using `findMin` and `delete`.
+
+### Debugging
+Note that this section shouldn't matter to the average user.
+* `showTree`. Raw.
+* `showTreeWith`. _Unimplemented_.
 
 Description of the internals
 ----------------------------
@@ -191,156 +346,3 @@ If it is one:
     xor k max: 000000000000 0 ????????
 
 Therefore, the splitting bit is set iff `xor min k > xor k max`. Taking the terminology from the original article, `insideR k min max = xor min k > xor k max`.
-
-Benchmark Results
------------------
-The criterion report is [here](http://gereeter.github.io/bounded-intmap/report.html).
-
-Current Progress
-----------------
-Below is a listing of every function in stock `Data.IntMap`, along with the implementation state in `bounded-intmap`. There are three implementation states:
-
-* Raw means that I have implemented the function directly. These functions should be on par with or faster than their corresponding functions in stock `Data.IntMap`.
-* Delegated means that I have implemented the function, but in terms of other functions. This usually means that it will be slower than stock `Data.IntMap`, sometimes asymptotically, and I haven't figured out how to implement it (or implement it nicely) yet. Note that some functions marked as such, like `insertWithKey`, are trivial uses of other functions are should have almost no performance hit.
-* Unimplemented means that I have yet to implement the function in any form.
-
-### Operators
-* `(!)`. Delegated, using `findWithDefault`.
-* `(\\)`. Delegated, using `difference`.
-
-### Query
-* `null`. Raw.
-* `size`. Raw.
-* `member`. Raw.
-* `notMember`. Raw.
-* `lookup`. Raw.
-* `findWithDefault`. Raw.
-* `lookupLT`. Raw.
-* `lookupGT`. Raw.
-* `lookupLE`. Raw.
-* `lookupGE`. Raw.
-
-### Construction
-* `empty`. Raw.
-* `singleton`. Raw.
-
-#### Insertion
-* `insert`. Raw.
-* `insertWith`. Raw.
-* `insertWithKey`. Delegated, using `insertWith`.
-* `insertLookupWithKey`. Raw.
-
-#### Delete/Update
-* `delete`. Raw.
-* `adjust`. Raw.
-* `adjustWithkey`. Delegated, using `adjust`.
-* `update`. Raw.
-* `updateWithKey`. Delegated, using `update`.
-* `updateLookupWithKey`. Raw.
-* `alter`. Delegated, using `member` and either `update` or `insert`.
-
-### Combine
-#### Union
-* `union`. Raw.
-* `unionWith`. Delegated, using `unionWithKey`.
-* `unionWithKey`. Raw.
-* `unions`. Delegated, using lots of `union`s.
-* `unionsWith`. Delegated, using lots of `unionWith`s.
-
-#### Difference
-* `difference`. Raw.
-* `differenceWith`. Delegated, using `differenceWithKey`.
-* `differenceWithKey`. Raw.
-
-#### Intersection
-* `intersection`. Raw. See note on `intersectionWithKey`.
-* `intersectionWith`. Delegated, using `intersectionWithKey`.
-* `intersectionWithKey`. Raw. Note that it is still slower than stock `Data.IntMap` by up to (though not necessarily) 50%.
-
-#### Universal combining function
-* `mergeWithKey`. _Unimplemented_. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.
-
-### Traversal
-#### Map
-* `map`. Raw. Actually, this is sort of delegated to `fmap`, but since the delegation is just `map = fmap` and will probably be inlined, I count this as raw.
-* `mapWithKey`. Raw.
-* `traverseWithKey`. Raw.
-* `mapAccum`. Delegated, using `mapAccumWithKey`.
-* `mapAccumWithKey`. Raw.
-* `mapAccumRWithKey`. Raw.
-* `mapKeys`. Delegated, using `foldrWithKey'` and lots of `insert`s.
-* `mapKeysWith`. Delegated, using `foldrWithKey'` and lots of `insertWith`s.
-* `mapKeysMonotonic`. Delegated, using `mapKeys`.
-
-#### Folds
-* `foldr`. Raw.
-* `foldl`. Raw.
-* `foldrWithKey`. Raw.
-* `foldlWithKey`. Raw.
-* `foldMapWithKey`. Raw.
-
-#### Strict folds
-* `foldr'`. Raw.
-* `foldl'`. Raw.
-* `foldrWithKey'`. Raw.
-* `foldlWithKey'`. Raw.
-
-### Conversion
-* `elems`. Delegated, using `foldr`.
-* `keys`. Delegated, using `foldrWithKey`.
-* `assocs`. Delegated, using `toAscList`.
-* `keysSet`. _Unimplemented_. Note that I'm not sure whether to convert to stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
-* `fromSet`. _Unimplemented_. Note that I'm not sure whether to convert from stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
-
-#### Lists
-* `toList`. Delegated, using `toAscList`.
-* `fromList`. Delegated, using lots of `insert`s.
-* `fromListWith`. Delegated, using lots of `insert`s.
-* `fromListWithKey`. Delegated, using lots of `insert`s.
-
-#### Ordered lists
-* `toAscList`. Delegated, using `foldrWithKey`.
-* `toDescList`. Delegated, using `foldlWithKey`.
-* `fromAscList`. Delegated, using `fromList`.
-* `fromAscListWith`. Delegated, using `fromListWith`.
-* `fromAscListWithKey`. Delegated, using `fromListWithKey`.
-* `fromDistinctAscList`. Delegated, using `fromList`.
-
-### Filter
-* `filter`. Delegated, using `filterWithKey`.
-* `filterWithKey`. Raw.
-* `partition`. Delegated, using `partitionWithKey`.
-* `partitionWithKey`. Raw.
-* `mapMaybe`. Delegated, using `mapMaybeWithKey`.
-* `mapMaybeWithKey`. Raw.
-* `mapEither`. Delegated, using `mapEitherWithKey`.
-* `mapEitherWithKey`. Raw.
-* `split`. Delegated, using `splitLookup`.
-* `splitLookup`. Raw.
-
-### Submap
-* `isSubmapOf`. _Unimplemented_.
-* `isSubmapOfBy`. _Unimplemented_.
-* `isProperSubmapOf`. _Unimplemented_
-* `isProperSubmapOfBy`. _Unimplemented_.
-
-### Min/Max
-* `findMin`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
-* `findMax`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
-* `deleteMin`. Delegated, using `findMin` and `delete`.
-* `deleteMax`. Delegated, using `findMin` and `delete`.
-* `deleteFindMin`. Delegated, using `findMin` and `delete`.
-* `deleteFindMax`. Delegated, using `findMin` and `delete`.
-* `updateMin`. Delegated, using `findMin` and `update`.
-* `updateMax`. Delegated, using `findMin` and `update`.
-* `updateMinWithKey`. Delegated, using `findMin` and `updateWithKey`.
-* `updateMaxWithKey`. Delegated, using `findMin` and `updateWithKey`.
-* `minView`. Delegated, using `findMin` and `delete`.
-* `maxView`. Delegated, using `findMin` and `delete`.
-* `minViewWithKey`. Delegated, using `findMin` and `delete`.
-* `maxViewWithKey`. Delegated, using `findMin` and `delete`.
-
-### Debugging
-Note that this section shouldn't matter to the average user.
-* `showTree`. Raw.
-* `showTreeWith`. _Unimplemented_.
