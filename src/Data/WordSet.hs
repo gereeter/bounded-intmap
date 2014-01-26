@@ -66,8 +66,8 @@ module Data.WordSet (
     , fromDistinctAscList
     
     -- * Debugging
-    , showTree
-    , valid
+    {-, showTree
+    , valid-}
 ) where
 
 import Data.WordSet.Internal

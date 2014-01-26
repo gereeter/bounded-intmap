@@ -14,14 +14,13 @@ import Data.Word (Word)
 import Data.Bits
 import Data.Bits.Extras (trailingZeros, leadingZeros)
 
-import Prelude hiding (foldr, foldl, null, map, filter)
+import Prelude hiding (foldr, foldl, null, map, filter, min, max)
 
 type Key = Word
 type BitMap = Word
-type Prefix = Word
 
 data WordSet = NonEmpty {-# UNPACK #-} !Key !Node | Empty deriving (Eq)
-data Node = Bin {-# UNPACK #-} !Key !Node !Node | BM {-# UNPACK #-} !Prefix {-# UNPACK #-} !BitMap | Tip deriving (Eq, Show)
+data Node = Bin {-# UNPACK #-} !Key !Node !Node | BM {-# UNPACK #-} !Key {-# UNPACK #-} !BitMap | Tip deriving (Eq, Show)
 
 instance Show WordSet where
     show m = "fromList " ++ show (toList m)
@@ -55,8 +54,8 @@ member k = k `seq` start
         | k == min = True
         | otherwise = goL (xor min k) node
     
-    goL !xorCache Tip = False
-    goL !xorCache (BM pre bm) = prefixOf k == pre && (bm .&. (1 `unsafeShiftL` suffixOf k) /= 0)
+    goL !_ Tip = False
+    goL !xorCache (BM _ bm) = xorCache <= suffixMask && (bm .&. getSuf k /= 0)
     goL !xorCache (Bin max l r)
         | k < max = if xorCache < xorCacheMax
                     then goL xorCache l
@@ -64,8 +63,8 @@ member k = k `seq` start
         | otherwise = k == max
       where xorCacheMax = xor k max
     
-    goR !xorCache Tip = False
-    goR !xorCache (BM pre bm) = prefixOf k == pre && (bm .&. (1 `unsafeShiftL` suffixOf k) /= 0)
+    goR !_ Tip = False
+    goR !xorCache (BM _ bm) = xorCache <= suffixMask && (bm .&. getSuf k /= 0)
     goR !xorCache (Bin min l r)
         | k > min = if xorCache < xorCacheMin
                     then goR xorCache r
@@ -83,8 +82,8 @@ notMember k = k `seq` start
         | k == min = False
         | otherwise = goL (xor min k) node
     
-    goL !xorCache Tip = True
-    goL !xorCache (BM pre bm) = prefixOf k /= pre || (bm .&. (1 `unsafeShiftL` suffixOf k) == 0)
+    goL !_ Tip = True
+    goL !xorCache (BM _ bm) = xorCache <= suffixMask && (bm .&. getSuf k == 0)
     goL !xorCache (Bin max l r)
         | k < max = if xorCache < xorCacheMax
                     then goL xorCache l
@@ -92,8 +91,8 @@ notMember k = k `seq` start
         | otherwise = k == max
       where xorCacheMax = xor k max
     
-    goR !xorCache Tip = True
-    goR !xorCache (BM pre bm) = prefixOf k /= pre && (bm .&. (1 `unsafeShiftL` suffixOf k) == 0)
+    goR !_ Tip = True
+    goR !xorCache (BM _ bm) = xorCache <= suffixMask && (bm .&. getSuf k == 0)
     goR !xorCache (Bin min l r)
         | k > min = if xorCache < xorCacheMin
                     then goR xorCache r
@@ -247,12 +246,13 @@ insert k = k `seq` start
         | k < min = NonEmpty k (endL (xor min k) min root)
         | otherwise = n
     
-    goL !xorCache min Tip = singleNode k
-    goL !xorCache min n@(BM pre bm)
-        | prefixOf k == pre = BM pre (setBit bm (suffixOf k))
-        | k > pre = Bin k n Tip
-        | otherwise = let DR max bm' = deleteMaxBM pre bm
-                      in Bin max (singleNode k) (bitmap pre bm')
+    goL !xorCache min Tip
+        | xorCache <= suffixMask = BM k (getSuf min .|. getSuf k)
+        | otherwise = Bin k Tip Tip
+    goL !xorCache _ n@(BM max bm)
+        | k <= max = BM max (bm .|. getSuf k)
+        | xorCache <= suffixMask = BM k (bm .|. getSuf k) 
+        | otherwise = Bin k n Tip
     goL !xorCache min n@(Bin max l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max (goL xorCache min l) r
@@ -262,13 +262,14 @@ insert k = k `seq` start
                     else Bin k l (endR xorCacheMax max r)
         | otherwise = n
       where xorCacheMax = xor k max
-
-    goR !xorCache max Tip = singleNode k
-    goR !xorCache max n@(BM pre bm)
-        | prefixOf k == pre = BM pre (setBit bm (suffixOf k))
-        | k < pre = Bin k Tip n
-        | otherwise = let DR min bm' = deleteMinBM pre bm
-                      in Bin min (bitmap pre bm') (singleNode k)
+    
+    goR !xorCache max Tip
+        | xorCache <= suffixMask = BM k (getSuf k .|. getSuf max)
+        | otherwise = Bin k Tip Tip
+    goR !xorCache _ n@(BM min bm)
+        | k >= min = BM min (bm .|. getSuf k)
+        | xorCache <= suffixMask = BM k (bm .|. getSuf k)
+        | otherwise = Bin k Tip n
     goR !xorCache max n@(Bin min l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min l (goR xorCache max r)
@@ -281,22 +282,24 @@ insert k = k `seq` start
     
     endL !xorCache min = finishL
       where
-        finishL Tip = singleNode min
-        finishL n@(BM pre bm)
-            | prefixOf min == pre = BM pre (setBit bm (suffixOf min))
-            | otherwise = let DR max bm' = deleteMaxBM pre bm
-                          in Bin max (singleNode min) (bitmap pre bm')
+        finishL Tip
+            | xorCache <= suffixMask = BM min (getSuf k .|. getSuf min)
+            | otherwise = Bin min Tip Tip
+        finishL (BM max bm)
+            | xorCache <= suffixMask = BM max (bm .|. getSuf k)
+            | otherwise = Bin max Tip (BM min bm)
         finishL (Bin max l r)
             | xor min max < xorCache = Bin max Tip (Bin min l r)
             | otherwise = Bin max (finishL l) r
 
     endR !xorCache max = finishR
       where
-        finishR Tip = singleNode max
-        finishR n@(BM pre bm)
-            | prefixOf max == pre = BM pre (setBit bm (suffixOf max))
-            | otherwise = let DR min bm' = deleteMinBM pre bm
-                          in Bin min (bitmap pre bm') (singleNode max)
+        finishR Tip
+            | xorCache <= suffixMask = BM max (getSuf max .|. getSuf k)
+            | otherwise = Bin max Tip Tip
+        finishR (BM min bm)
+            | xorCache <= suffixMask = BM min (bm .|. getSuf k)
+            | otherwise = Bin min (BM max bm) Tip
         finishR (Bin min l r)
             | xor min max < xorCache = Bin min (Bin max l r) Tip
             | otherwise = Bin min l (finishR r)
@@ -310,20 +313,31 @@ delete k = k `seq` start
     start m@(NonEmpty min Tip)
         | k == min = Empty
         | otherwise = m
-    start m@(NonEmpty min (BM pre bm))
-        | k == min = let DR min' bm' = deleteMinBM pre bm
-                     in NonEmpty min' (bitmap pre bm')
-        | prefixOf k == pre = NonEmpty min (bitmap pre (clearBit bm (suffixOf k)))
-        | otherwise = m
+    start m@(NonEmpty min (BM max bm))
+        | k < min || k > max = m
+        | k == min = if bm' == getSuf max
+                     then NonEmpty max Tip
+                     else NonEmpty (prefixOf k .|. getMinBM bm') (BM max bm')
+        | k == max = if bm' == getSuf min
+                     then NonEmpty min Tip
+                     else NonEmpty min (BM (prefixOf k .|. getMaxBM bm') bm')
+        | otherwise = NonEmpty min (BM max bm')
+      where
+        bm' = bm .&. complement (getSuf k)
     start m@(NonEmpty min root@(Bin max l r))
         | k < min = m
-        | k == min = let DR min' root' = deleteMinNode max l r in NonEmpty min' root'
+        | k == min = let DR min' root' = goDeleteMin min max l r in NonEmpty min' root'
         | otherwise = NonEmpty min (goL (xor min k) min root)
     
-    goL !xorCache min Tip = Tip
-    goL !xorCache min n@(BM pre bm)
-        | prefixOf k == pre = bitmap pre (clearBit bm (suffixOf k))
+    goL !_        _   Tip = Tip
+    goL !xorCache min n@(BM max bm)
+        | k < max = BM max bm'
+        | k == max = if bm' == getSuf min
+                     then Tip
+                     else BM (prefixOf max .|. getMaxBM bm') bm'
         | otherwise = n
+      where
+        bm' = bm .&. complement (getSuf k)
     goL !xorCache min n@(Bin max l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max (goL xorCache min l) r
@@ -331,20 +345,23 @@ delete k = k `seq` start
         | k > max = n
         | otherwise = case r of
             Tip -> l
-            BM pre bm -> let DR max' bm' = deleteMaxBM pre bm
-                         in if bm' == 0
-                            then case l of
-                                Tip -> singleNode max'
-                                _ -> Bin max' l Tip
-                            else Bin max' l (BM pre bm')
-            Bin minI lI rI -> let DR max' r' = deleteMaxNode minI lI rI
+            BM minI bm | bm' == getSuf minI -> Bin minI l Tip
+                       | otherwise -> Bin (prefixOf max .|. getMaxBM bm') l (BM minI bm')
+              where
+                bm' = bm .&. complement (getSuf max)
+            Bin minI lI rI -> let DR max' r' = goDeleteMax max minI lI rI
                               in  Bin max' l r'
       where xorCacheMax = xor k max
     
-    goR !xorCache max Tip = Tip
-    goR !xorCache max n@(BM pre bm)
-        | prefixOf k == pre = bitmap pre (clearBit bm (suffixOf k))
+    goR !_        _   Tip = Tip
+    goR !xorCache max n@(BM min bm)
+        | k > min = BM min bm'
+        | k == min = if bm' == getSuf max
+                     then Tip
+                     else BM (prefixOf min .|. getMinBM bm') bm'
         | otherwise = n
+      where
+        bm' = bm .&. complement (getSuf k)
     goR !xorCache max n@(Bin min l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min l (goR xorCache max r)
@@ -352,15 +369,37 @@ delete k = k `seq` start
         | k < min = n
         | otherwise = case l of
             Tip -> r
-            BM pre bm -> let DR min' bm' = deleteMinBM pre bm
-                         in if bm' == 0
-                            then case r of
-                                Tip -> singleNode min'
-                                _ -> Bin min' Tip r
-                            else Bin min' (BM pre bm') r
-            Bin maxI lI rI -> let DR min' l' = deleteMinNode maxI lI rI
+            BM maxI bm | bm' == getSuf maxI -> Bin maxI Tip r
+                       | otherwise -> Bin (prefixOf min .|. getMinBM bm') (BM maxI bm') r
+              where
+                bm' = bm .&. complement (getSuf min)
+            Bin maxI lI rI -> let DR min' l' = goDeleteMin min maxI lI rI
                               in  Bin min' l' r
       where xorCacheMin = xor min k
+    
+    goDeleteMin min max l r = case l of
+        Tip -> case r of
+            Tip -> DR max Tip
+            BM minI bm -> DR minI (BM max bm)
+            Bin minI lI rI -> DR minI (Bin max lI rI)
+        BM maxI bm | bm' == getSuf maxI -> DR maxI (Bin max Tip r)
+                   | otherwise -> DR (prefixOf min .|. getMinBM bm') (Bin max (BM maxI bm') r)
+          where
+            bm' = bm .&. complement (getSuf min)
+        Bin maxI lI rI -> let DR min' l' = goDeleteMin min maxI lI rI
+                          in  DR min' (Bin max l' r)
+    
+    goDeleteMax max min l r = case r of
+        Tip -> case l of
+            Tip -> DR min Tip
+            BM maxI bm -> DR maxI (BM min bm)
+            Bin maxI lI rI -> DR maxI (Bin min lI rI)
+        BM minI bm | bm' == getSuf minI -> DR minI (Bin min l Tip)
+                   | otherwise -> DR (prefixOf max .|. getMaxBM bm') (Bin min l (BM minI bm'))
+          where
+            bm' = bm .&. complement (getSuf max)
+        Bin minI lI rI -> let DR max' r' = goDeleteMax max minI lI rI
+                          in  DR max' (Bin min l r')
 
 -- TODO: Does a strict pair work? My guess is not, as GHC was already
 -- unboxing the tuple, but it would be simpler to use one of those.
@@ -399,20 +438,22 @@ foldr :: (Key -> b -> b) -> b -> WordSet -> b
 foldr f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = f min $ goL root z
+    start (NonEmpty min root) = f min $ goL min root z
     
-    goL Tip acc = acc
-    goL (BM pre bm) acc = goBM pre bm acc
-    goL (Bin max l r) acc = goL l $ goR r $ f max acc
+    goL _ Tip acc = acc
+    goL min (BM _ bm) acc = goBM (prefixOf min) (bm .&. complement (getSuf min)) acc
+    goL min (Bin max l r) acc = goL min l $ goR max r $ f max acc
     
-    goR Tip acc = acc
-    goR (BM pre bm) acc = goBM pre bm acc
-    goR (Bin min l r) acc = f min $ goL l $ goR r acc
+    goR _ Tip acc = acc
+    goR max (BM _ bm) acc = goBM (prefixOf max) (bm .&. complement (getSuf max)) acc
+    goR max (Bin min l r) acc = f min $ goL min l $ goR max r acc
     
-    goBM pre bm acc = let DR min bm' = deleteMinBM pre bm
-                  in if bm' == 0
-                     then f min $ acc
-                     else f min $ goBM pre bm' acc
+    goBM pre = pre `seq` loop
+      where
+        loop 0 acc = acc
+        loop bm acc = let min = pre .|. getMinBM bm
+                          bm' = bm .&. complement (getSuf min)
+                      in f min (loop bm' acc)
 
 -- | /O(n)/. Fold the elements in the set using the given left-associative
 -- binary operator, such that @'foldl' f z == 'Prelude.foldl' f z . 'toAscList'@.
@@ -424,20 +465,22 @@ foldl :: (a -> Key -> a) -> a -> WordSet -> a
 foldl f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL root $ f z min
+    start (NonEmpty min root) = goL min (f z min) root
     
-    goL Tip acc = acc
-    goL (BM pre bm) acc = goBM pre bm acc
-    goL (Bin max l r) acc = (f $ goR r $ goL l acc) $ max
+    goL _ acc Tip = acc
+    goL min acc (BM _ bm) = goBM (prefixOf min) acc (bm .&. complement (getSuf min))
+    goL min acc (Bin max l r) = f (goR max (goL min acc l) r) max
     
-    goR Tip acc = acc
-    goR (BM pre bm) acc = goBM pre bm acc
-    goR (Bin min l r) acc = goR r $ goL l $ f acc min
+    goR _ acc Tip = acc
+    goR max acc (BM _ bm) = goBM (prefixOf max) acc (bm .&. complement (getSuf max))
+    goR max acc (Bin min l r) = goR max (goL min (f acc min) l) r
     
-    goBM pre bm acc = let DR min bm' = deleteMinBM pre bm
-                  in if bm' == 0
-                     then f acc min
-                     else goBM pre bm' $ f acc min
+    goBM pre = pre `seq` loop
+      where
+        loop acc 0 = acc
+        loop acc bm = let min = pre .|. getMinBM bm
+                          bm' = bm .&. complement (getSuf min)
+                      in loop (f acc min) bm'
 
 -- | /O(n)/. A strict version of 'foldr'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -446,20 +489,22 @@ foldr' :: (Key -> b -> b) -> b -> WordSet -> b
 foldr' f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = f min $! goL root z
+    start (NonEmpty min root) = f min $! goL min root z
     
-    goL Tip acc = acc
-    goL (BM pre bm) acc = goBM pre bm acc
-    goL (Bin max l r) acc = goL l $! goR r $! f max acc
+    goL _ Tip acc = acc
+    goL min (BM _ bm) acc = goBM (prefixOf min) (bm .&. complement (getSuf min)) $! acc
+    goL min (Bin max l r) acc = goL min l $! goR max r $! f max $! acc
     
-    goR Tip acc = acc
-    goR (BM pre bm) acc = goBM pre bm acc
-    goR (Bin min l r) acc = f min $! goL l $! goR r acc
+    goR _ Tip acc = acc
+    goR max (BM _ bm) acc = goBM (prefixOf max) (bm .&. complement (getSuf max)) $! acc
+    goR max (Bin min l r) acc = f min $! goL min l $! goR max r acc
     
-    goBM pre bm acc = let DR min bm' = deleteMinBM pre bm
-                  in if bm' == 0
-                     then f min $! acc
-                     else f min $! goBM pre bm' acc
+    goBM pre = pre `seq` loop
+      where
+        loop 0 acc = acc
+        loop bm acc = let min = pre .|. getMinBM bm
+                          bm' = bm .&. complement (getSuf min)
+                      in f min $! loop bm' $! acc
 
 -- | /O(n)/. A strict version of 'foldl'. Each application of the operator is
 -- evaluated before using the result in the next application. This
@@ -468,20 +513,24 @@ foldl' :: (a -> Key -> a) -> a -> WordSet -> a
 foldl' f z = start
   where
     start Empty = z
-    start (NonEmpty min root) = goL root $! f z min
+    start (NonEmpty min root) = s (goL min) (f z min) root
     
-    goL Tip acc = acc
-    goL (BM pre bm) acc = goBM pre bm acc
-    goL (Bin max l r) acc = (f $! goR r $! goL l acc) $! max
+    goL _ acc Tip = acc
+    goL min acc (BM _ bm) = s (goBM (prefixOf min)) acc (bm .&. complement (getSuf min))
+    goL min acc (Bin max l r) = s f (s (goR max) (s (goL min) acc l) r) max
     
-    goR Tip acc = acc
-    goR (BM pre bm) acc = goBM pre bm acc
-    goR (Bin min l r) acc = goR r $! goL l $! f acc min
+    goR _ acc Tip = acc
+    goR max acc (BM _ bm) = goBM (prefixOf max) acc (bm .&. complement (getSuf max))
+    goR max acc (Bin min l r) = s (goR max) (s (goL min) (s f acc min) l) r
     
-    goBM pre bm acc = let DR min bm' = deleteMinBM pre bm
-                  in if bm' == 0
-                     then f acc min
-                     else goBM pre bm' $! f acc min
+    goBM pre = pre `seq` loop
+      where
+        loop acc 0 = acc
+        loop acc bm = let min = pre .|. getMinBM bm
+                          bm' = bm .&. complement (getSuf min)
+                      in s loop (s f acc min) bm'
+    
+    s = ($!)
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [Key] -> WordSet
@@ -533,30 +582,19 @@ findMin (NonEmpty min _) = min
 findMax :: WordSet -> Word
 findMax Empty = error "findMax: empty set has no maximal element"
 findMax (NonEmpty min Tip) = min
+findMax (NonEmpty _ (BM max _)) = max
 findMax (NonEmpty _ (Bin max _ _)) = max
 
 deleteMin :: WordSet -> WordSet
 deleteMin Empty = Empty
-deleteMin (NonEmpty _ Tip) = Empty
-deleteMin (NonEmpty _ (BM pre bm)) = let DR min bm' = deleteMinBM pre bm
-                                     in if bm' == 0
-                                        then NonEmpty min Tip
-                                        else NonEmpty min (BM pre bm')
-deleteMin (NonEmpty _ (Bin max l r)) = let DR min root = deleteMinNode max l r
-                                       in  NonEmpty min root
+deleteMin m = delete (findMin m) m
 
 deleteMax :: WordSet -> WordSet
 deleteMax Empty = Empty
-deleteMax (NonEmpty _ Tip) = Empty
-deleteMax (NonEmpty min (BM pre bm)) = let DR _ bm' = deleteMaxBM pre bm
-                                       in if bm' == 0
-                                          then NonEmpty min Tip
-                                          else NonEmpty min (BM pre bm')
-deleteMax (NonEmpty min (Bin _ l r)) = let DR _ root = deleteMaxNode min l r
-                                       in NonEmpty min root
+deleteMax m = delete (findMin m) m
 
 ----------------------------
-
+{-
 -- | Show the tree that implements the map.
 showTree :: WordSet -> String
 showTree = unlines . aux where
@@ -593,70 +631,20 @@ valid (NonEmpty min root) = allKeys (> min) root && goL min root
     
     allKeys p Tip = True
     allKeys p (Bin b l r) = p b && allKeys p l && allKeys p r
-
+-}
 --------------------------
 
-{-# INLINE deleteMinNode #-}
-deleteMinNode :: Key -> Node -> Node -> DeleteResult Node
-deleteMinNode max l r = case l of
-    Tip -> case r of
-       Tip -> DR max r
-       BM pre bm -> let DR min bm' = deleteMinBM pre bm
-                    in DR min (bitmap pre bm')
-       Bin min l' r' -> DR min (Bin max l' r')
-    BM pre bm -> let DR min bm' = deleteMinBM pre bm
-                 in if bm' == 0
-                    then case r of
-                        Tip -> DR min (singleNode max)
-                        _ -> DR min (Bin max Tip r)
-                    else DR min (Bin max (BM pre bm') r)
-    Bin maxI lI rI -> let DR min l' = deleteMinNode maxI lI rI
-                      in  DR min (Bin max l' r)
-
-{-# INLINE deleteMaxNode #-}
-deleteMaxNode :: Key -> Node -> Node -> DeleteResult Node
-deleteMaxNode min l r = case r of
-    Tip -> case l of
-        Tip -> DR min l
-        BM pre bm -> let DR max bm' = deleteMaxBM pre bm
-                     in DR max (bitmap pre bm')
-        Bin max l' r' -> DR max (Bin min l' r')
-    BM pre bm -> let DR max bm' = deleteMaxBM pre bm
-                 in if bm' == 0
-                    then case l of
-                        Tip -> DR max (singleNode min)
-                        _ -> DR max (Bin min l Tip)
-                    else DR max (Bin min l (BM pre bm'))
-    Bin minI lI rI -> let DR max r' = deleteMaxNode minI lI rI
-                      in  DR max (Bin min l r')
-
-{-# INLINE deleteMinBM #-}
-deleteMinBM :: Prefix -> BitMap -> DeleteResult BitMap
-deleteMinBM pre bm = let suf = trailingZeros bm
-                         bm' = clearBit bm (fromIntegral suf)
-                         min = pre .|. fromIntegral suf
-                     in DR min bm'
-
-{-# INLINE deleteMaxBM #-}
-deleteMaxBM :: Prefix -> BitMap -> DeleteResult BitMap
-deleteMaxBM pre bm = let suf = bitSize bm - 1 - fromIntegral (leadingZeros bm)
-                         bm' = clearBit bm suf
-                         max = pre .|. fromIntegral suf
-                     in DR max bm'
-
-singleNode :: Key -> Node
-singleNode k = BM (prefixOf k) (setBit 0 (suffixOf k))
-
-bitmap :: Prefix -> BitMap -> Node
-bitmap _ 0 = Tip
-bitmap pre bm = BM pre bm
+getMinBM, getMaxBM :: BitMap -> Word
+getMinBM bm = fromIntegral (trailingZeros bm)
+getMaxBM bm = fromIntegral (bitSize bm) - 1 - fromIntegral (leadingZeros bm)
 
 prefixMask, suffixMask :: Word
 prefixMask = complement suffixMask
 suffixMask = fromIntegral (bitSize (undefined :: Word)) - 1
 
-prefixOf :: Word -> Word
-prefixOf = (prefixMask .&.)
+prefixOf, suffixOf :: Word -> Word
+prefixOf = (.&. prefixMask)
+suffixOf = (.&. suffixMask)
 
-suffixOf :: Word -> Int
-suffixOf = fromIntegral . (suffixMask .&.)
+getSuf :: Word -> Word
+getSuf k = 1 `unsafeShiftL` fromIntegral (suffixOf k)
