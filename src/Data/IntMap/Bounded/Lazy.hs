@@ -90,6 +90,8 @@ module Data.IntMap.Bounded.Lazy (
     , elems
     , keys
     , assocs
+    , keysSet
+    , fromSet
     
     -- ** Lists
     , toList
@@ -490,6 +492,14 @@ mapKeysWith combine f = foldlWithKey' (\m k a -> insertWith combine (f k) a m) e
 -- > mapKeysMonotonic (\ k -> k * 2) (fromList [(5,"a"), (3,"b")]) == fromList [(6, "b"), (10, "a")]
 mapKeysMonotonic :: (Key -> Key) -> IntMap a -> IntMap a
 mapKeysMonotonic = mapKeys
+
+-- | /O(n)/. Build a map from a set of keys and a function which for each key
+-- computes its value.
+--
+-- > fromSet (\k -> replicate k 'a') (Data.IntSet.fromList [3, 5]) == fromList [(5,"aaaaa"), (3,"aaa")]
+-- > fromSet undefined Data.IntSet.empty == empty
+fromSet :: (Key -> a) -> IS.IntSet -> IntMap a
+fromSet f = fromDistinctAscList . Data.List.map (\k -> (k, f k)) . IS.toList
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> IntMap a

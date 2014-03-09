@@ -21,6 +21,8 @@ import Data.Bits (xor)
 import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap.Base as W
 
+import qualified Data.IntSet as IS
+
 import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
 type Key = Int
@@ -559,6 +561,13 @@ keys = foldrWithKey (\k _ l -> k : l) []
 -- > assocs empty == []
 assocs :: IntMap a -> [(Key, a)]
 assocs = toAscList
+
+-- | /O(n*min(n,W))/. The set of all keys of the map.
+--
+-- > keysSet (fromList [(5,"a"), (3,"b")]) == Data.IntSet.fromList [3,5]
+-- > keysSet empty == Data.IntSet.empty
+keysSet :: IntMap a -> IS.IntSet
+keysSet = IS.fromDistinctAscList . keys
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: IntMap a -> [(Key, a)]
