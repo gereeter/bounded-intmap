@@ -137,6 +137,8 @@ module Data.WordMap.Lazy (
     -- * Submap
     , isSubmapOf
     , isSubmapOfBy
+    , isProperSubmapOf
+    , isProperSubmapOfBy
     
     -- * Debugging
     , showTree

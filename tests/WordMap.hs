@@ -338,9 +338,19 @@ unitTests = testGroup "Unit Tests"
             , testCase "false2" $ isSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= False
             , testCase "false3" $ isSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)]) @?= False
             ]
+        , testGroup "isProperSubmapOf" -- NOTE: These are not in the docs
+            [ testCase "true1" $ isProperSubmapOf (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "false1" $ isProperSubmapOf (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)]) @?= False
+            , testCase "false2" $ isProperSubmapOf (fromList [(1,1),(2,2)]) (fromList [(1,1)]) @?= False
+            ]
+        , testGroup "isProperSubmapOfBy"
+            [ testCase "true1" $ isProperSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "true2" $ isProperSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)]) @?= True
+            , testCase "false1" $ isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)]) @?= False
+            , testCase "false2" $ isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)]) @?= False
+            , testCase "false3" $ isProperSubmapOfBy (<)  (fromList [(1,1)])       (fromList [(1,1),(2,2)]) @?= False
+            ]
         ]
-        -- TODO: isProperSubmapOf (unimplemented)
-        -- TODO: isProperSubmapOfBy (unimplemented)
     , testGroup "MinMax"
         -- FIXME: findMin
         -- FIXME: findMax

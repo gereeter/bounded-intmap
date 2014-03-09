@@ -1445,6 +1445,132 @@ isSubmapOfBy p = start
         | otherwise = p v minV
       where  xorCacheMin = xor min k
 
+-- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal).
+-- Defined as (@'isProperSubmapOf' = 'isProperSubmapOfBy' (==)@).
+isProperSubmapOf :: Eq a => WordMap a -> WordMap a -> Bool
+isProperSubmapOf = isProperSubmapOfBy (==)
+
+{- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal).
+The expression (@'isProperSubmapOfBy' f m1 m2@) returns 'True' when
+@m1@ and @m2@ are not equal,
+all keys in @m1@ are in @m2@, and when @f@ returns 'True' when
+applied to their respective values. For example, the following
+expressions are all 'True':
+
+> isProperSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+> isProperSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+
+But the following are all 'False':
+
+> isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)])
+> isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)])
+> isProperSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+-}
+isProperSubmapOfBy :: (a -> b -> Bool) -> WordMap a -> WordMap b -> Bool
+isProperSubmapOfBy p m1 m2 = submapCmp p m1 m2 == LT
+
+submapCmp :: (a -> b -> Bool) -> WordMap a -> WordMap b -> Ordering
+submapCmp p = start
+  where
+    start Empty Empty = EQ
+    start Empty !_ = LT
+    start !_ Empty = GT
+    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
+        | min1 < min2 = GT
+        | min1 > min2 = fromBool $ goL minV1 min1 root1 min2 root2
+        | p minV1 minV2 = goLFused min1 root1 root2
+        | otherwise = GT
+    
+    goL minV1 min1 Tip min2 n2 = goLookupL min1 minV1 (xor min1 min2) n2
+    goL _     _    _   _    Tip = False
+    goL minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 (Bin max2 maxV2 l2 r2)
+        | max1 > max2 = False
+        | max1 < max2 = case xor min1 max1 `ltMSB` xor min2 max2 of
+            True | xor min2 min1 < xor min1 max2 -> goL minV1 min1 n1 min2 l2 -- LT
+                 | otherwise -> goR maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+            False -> goL minV1 min1 l1 min2 l2 && goR maxV1 max1 r1 max2 r2 -- EQ
+        | otherwise = p maxV1 maxV2 && case xor min1 max1 `ltMSB` xor min2 max1 of
+            True -> goRFusedBool max1 (Bin min1 minV1 l1 r1) r2 -- LT
+            False -> goL minV1 min1 l1 min2 l2 && goRFusedBool max1 r1 r2 -- EQ
+    
+    goLFused _ Tip Tip = EQ
+    goLFused _ Tip _ = LT
+    goLFused _ _ Tip = GT
+    goLFused min n1@(Bin max1 maxV1 l1 r1) (Bin max2 maxV2 l2 r2)
+        | max1 > max2 = GT
+        | max1 < max2 = fromBool $ case xor min max1 `ltMSB` xor min max2 of
+            True -> goLFusedBool min n1 l2
+            False -> goLFusedBool min l1 l2 && goR maxV1 max1 r1 max2 r2 -- EQ
+        | p maxV1 maxV2 = goLFused min l1 l2 `combine` goRFused max1 r1 r2
+        | otherwise = GT
+    
+    goLFusedBool _ Tip _ = True
+    goLFusedBool _ _ Tip = False
+    goLFusedBool min n1@(Bin max1 maxV1 l1 r1) (Bin max2 maxV2 l2 r2)
+        | max1 > max2 = False
+        | max1 < max2 = case xor min max1 `ltMSB` xor min max2 of
+            True -> goLFusedBool min n1 l2
+            False -> goLFusedBool min l1 l2 && goR maxV1 max1 r1 max2 r2 -- EQ
+        | otherwise = p maxV1 maxV2 && goLFusedBool min l1 l2 && goRFusedBool max1 r1 r2
+    
+    goR maxV1 max1 Tip max2 n2 = goLookupR max1 maxV1 (xor max1 max2) n2
+    goR _     _    _   _    Tip = False
+    goR maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 (Bin min2 minV2 l2 r2)
+        | min1 < min2 = False
+        | min1 > min2 = case xor min1 max1 `ltMSB` xor min2 max2 of
+            True | xor min2 max1 > xor max1 max2 -> goR maxV1 max1 n1 max2 r2 -- LT
+                 | otherwise -> goL minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+            False -> goL minV1 min1 l1 min2 l2 && goR maxV1 max1 r1 max2 r2 -- EQ
+        | otherwise = p minV1 minV2 && case xor min1 max1 `ltMSB` xor min2 max1 of
+            True -> goLFusedBool min1 (Bin max1 maxV1 l1 r1) l2 -- LT
+            False -> goLFusedBool min1 l1 l2 && goR maxV1 max1 r1 max2 r2 -- EQ
+    
+    goRFused _ Tip Tip = EQ
+    goRFused _ Tip _ = LT
+    goRFused _ _ Tip = GT
+    goRFused max n1@(Bin min1 minV1 l1 r1) (Bin min2 minV2 l2 r2)
+        | min1 < min2 = GT
+        | min1 > min2 = fromBool $ case xor min1 max `ltMSB` xor min2 max of
+            True -> goRFusedBool max n1 r2
+            False -> goL minV1 min1 l1 min2 l2 && goRFusedBool max r1 r2 -- EQ
+        | p minV1 minV2 = goLFused min1 l1 l2 `combine` goRFused max r1 r2
+        | otherwise = GT
+    
+    goRFusedBool _ Tip _ = True
+    goRFusedBool _ _ Tip = False
+    goRFusedBool max n1@(Bin min1 minV1 l1 r1) (Bin min2 minV2 l2 r2)
+        | min1 < min2 = False
+        | min1 > min2 = case xor min1 max `ltMSB` xor min2 max of
+            True -> goRFusedBool max n1 r2
+            False -> goL minV1 min1 l1 min2 l2 && goRFusedBool max r1 r2 -- EQ
+        | otherwise = p minV1 minV2 && goLFusedBool min1 l1 l2 && goRFusedBool max r1 r2
+    
+    goLookupL _ _ !_ Tip = False
+    goLookupL k v !xorCache (Bin max maxV l r)
+        | k < max = if xorCache < xorCacheMax
+                    then goLookupL k v xorCache l
+                    else goLookupR k v xorCacheMax r
+        | k > max = False
+        | otherwise = p v maxV
+      where xorCacheMax = xor k max
+    
+    goLookupR _ _ !_ Tip = False
+    goLookupR k v !xorCache (Bin min minV l r)
+        | k > min = if xorCache < xorCacheMin
+                    then goLookupR k v xorCache r
+                    else goLookupL k v xorCacheMin l
+        | k < min = False
+        | otherwise = p v minV
+      where  xorCacheMin = xor min k
+    
+    fromBool True = LT
+    fromBool False = GT
+    
+    combine GT _ = GT
+    combine _ GT = GT
+    combine EQ EQ = EQ
+    combine _ _ = LT
+
 -- | /O(1)/. The minimal key of the map.
 findMin :: WordMap a -> (Key, a)
 findMin Empty = error "findMin: empty map has no minimal element"

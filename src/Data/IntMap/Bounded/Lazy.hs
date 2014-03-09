@@ -123,6 +123,8 @@ module Data.IntMap.Bounded.Lazy (
     -- * Submap
     , isSubmapOf
     , isSubmapOfBy
+    , isProperSubmapOf
+    , isProperSubmapOfBy
     
     -- * Min\/Max
     , findMin

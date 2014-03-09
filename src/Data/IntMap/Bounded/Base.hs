@@ -706,6 +706,30 @@ IntMap m1 `isSubmapOf` IntMap m2 = m1 `W.isSubmapOf` m2
 isSubmapOfBy :: (a -> b -> Bool) -> IntMap a -> IntMap b -> Bool
 isSubmapOfBy f (IntMap m1) (IntMap m2) = W.isSubmapOfBy f m1 m2
 
+-- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal).
+-- Defined as (@'isProperSubmapOf' = 'isProperSubmapOfBy' (==)@).
+isProperSubmapOf :: Eq a => IntMap a -> IntMap a -> Bool
+isProperSubmapOf (IntMap m1) (IntMap m2) = W.isProperSubmapOf m1 m2
+
+{- | /O(n+m)/. Is this a proper submap? (ie. a submap but not equal).
+The expression (@'isProperSubmapOfBy' f m1 m2@) returns 'True' when
+@m1@ and @m2@ are not equal,
+all keys in @m1@ are in @m2@, and when @f@ returns 'True' when
+applied to their respective values. For example, the following
+expressions are all 'True':
+
+> isProperSubmapOfBy (==) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+> isProperSubmapOfBy (<=) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+
+But the following are all 'False':
+
+> isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1),(2,2)])
+> isProperSubmapOfBy (==) (fromList [(1,1),(2,2)]) (fromList [(1,1)])
+> isProperSubmapOfBy (<) (fromList [(1,1)]) (fromList [(1,1),(2,2)])
+-}
+isProperSubmapOfBy :: (a -> b -> Bool) -> IntMap a -> IntMap b -> Bool
+isProperSubmapOfBy p (IntMap m1) (IntMap m2) = W.isProperSubmapOfBy p m1 m2
+
 -- | /O(1)/. The minimal key of the map.
 findMin :: IntMap a -> (Key, a)
 findMin (IntMap Empty) = error "findMin: empty map has no minimal element"

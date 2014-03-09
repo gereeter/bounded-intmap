@@ -9,7 +9,7 @@ Cabal-Version: >=1.8
 
 library
     HS-Source-Dirs:  src
-    Build-Depends:   base, deepseq, bits-extras
+    Build-Depends:   base, deepseq, bits-extras, containers
     Exposed-modules: Data.WordMap,
                         Data.WordMap.Base,
                         Data.WordMap.Lazy,

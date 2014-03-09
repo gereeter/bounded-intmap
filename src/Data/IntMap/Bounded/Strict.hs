@@ -123,6 +123,8 @@ module Data.IntMap.Bounded.Strict (
     -- * Submap
     , isSubmapOf
     , isSubmapOfBy
+    , isProperSubmapOf
+    , isProperSubmapOfBy
     
     -- * Min\/Max
     , findMin

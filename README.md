@@ -164,8 +164,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 ### Submap
 * `isSubmapOf`. Delegated, using `isSubmapOfBy`.
 * `isSubmapOfBy`. Raw.
-* `isProperSubmapOf`. _Unimplemented_
-* `isProperSubmapOfBy`. _Unimplemented_.
+* `isProperSubmapOf`. Delegated, using `isProperSubmapOfBy`.
+* `isProperSubmapOfBy`. Raw.
 
 ### Min/Max
 * `findMin`. Raw. Note that this is asymptotically faster than stock `Data.IntMap`.
