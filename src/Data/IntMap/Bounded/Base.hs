@@ -633,9 +633,9 @@ partitionWithKey p (IntMap m) = let (m1, m2) = W.partitionWithKey (p . w2i) m in
 split :: Key -> IntMap a -> (IntMap a, IntMap a)
 split k m
     | k < 0 = let (glb, lub) = W.split (i2w k) neg
-              in (IntMap glb, IntMap (W.binL lub (W.flipBounds nonneg)))
+              in (IntMap glb, IntMap (W.binL nonneg (W.flipBounds lub)))
     | otherwise = let (glb, lub) = W.split (i2w k) nonneg
-                  in (IntMap (W.binL neg (W.flipBounds glb)), IntMap lub)
+                  in (IntMap (W.binL glb (W.flipBounds neg)), IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -650,9 +650,9 @@ split k m
 splitLookup :: Key -> IntMap a -> (IntMap a, Maybe a, IntMap a)
 splitLookup k m
     | k < 0 = let (glb, eq, lub) = W.splitLookup (i2w k) neg
-              in (IntMap glb, eq, IntMap (W.binL lub (W.flipBounds nonneg)))
+              in (IntMap glb, eq, IntMap (W.binL nonneg (W.flipBounds lub)))
     | otherwise = let (glb, eq, lub) = W.splitLookup (i2w k) nonneg
-                  in (IntMap (W.binL neg (W.flipBounds glb)), eq, IntMap lub)
+                  in (IntMap (W.binL glb (W.flipBounds neg)), eq, IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -835,6 +835,6 @@ split0 (IntMap m@(NonEmpty min _ Tip))
     | w2i min < 0 = (m, Empty)
     | otherwise = (Empty, m)
 split0 (IntMap m@(NonEmpty min minV (Bin max maxV l r)))
-    | w2i (xor min max) < 0 = (NonEmpty min minV l, W.flipBounds (NonEmpty max maxV r))
+    | w2i (xor min max) < 0 = (W.flipBounds (NonEmpty max maxV r), NonEmpty min minV l)
     | w2i max < 0 = (m, Empty)
     | otherwise = (Empty, m)
