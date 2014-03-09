@@ -116,6 +116,7 @@ module Data.WordMap.Lazy (
     , mapEitherWithKey
     , split
     , splitLookup
+    , splitRoot
     
     -- * Min\/Max
     , findMin

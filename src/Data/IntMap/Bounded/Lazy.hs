@@ -114,8 +114,9 @@ module Data.IntMap.Bounded.Lazy (
     , mapMaybeWithKey
     , mapEither
     , mapEitherWithKey
-{-    , split
-    , splitLookup-}
+    , split
+    , splitLookup
+    , splitRoot
     
     -- * Submap
     , isSubmapOf

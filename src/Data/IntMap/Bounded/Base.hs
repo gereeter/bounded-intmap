@@ -647,6 +647,32 @@ splitLookup k m
   where
     (neg, nonneg) = split0 m
 
+-- | /O(1)/.  Decompose a map into pieces based on the structure of the underlying
+-- tree.  This function is useful for consuming a map in parallel.
+--
+-- No guarantee is made as to the sizes of the pieces; an internal, but
+-- deterministic process determines this.  However, it is guaranteed that the
+-- pieces returned will be in ascending order (all elements in the first submap
+-- less than all elements in the second, and so on).
+--
+-- Examples:
+--
+-- > splitRoot (fromList (zip [1..6::Int] ['a'..])) ==
+-- >   [fromList [(1,'a'),(2,'b'),(3,'c')],fromList [(4,'d'),(5,'e'),(6,'f')]]
+--
+-- > splitRoot empty == []
+--
+--  Note that the current implementation does not return more than two submaps,
+--  but you should not depend on this behaviour because it can change in the
+--  future without notice.
+{-# INLINE splitRoot #-}
+splitRoot :: IntMap a -> [IntMap a]
+splitRoot (IntMap Empty) = []
+splitRoot m@(IntMap (NonEmpty _ _ Tip)) = [m]
+splitRoot (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    | w2i (xor min max) < 0 = [IntMap (W.flipBounds (NonEmpty max maxV r)), IntMap (NonEmpty min minV l)]
+    | otherwise = [IntMap (NonEmpty min minV l), IntMap (W.flipBounds (NonEmpty max maxV r))]
+
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
 isSubmapOf :: Eq a => IntMap a -> IntMap a -> Bool

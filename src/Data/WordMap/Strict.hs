@@ -116,6 +116,7 @@ module Data.WordMap.Strict (
     , mapEitherWithKey
     , split
     , splitLookup
+    , splitRoot
     
     -- * Min\/Max
     , findMin
