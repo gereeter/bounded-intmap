@@ -131,8 +131,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `elems`. Delegated, using `foldr`.
 * `keys`. Delegated, using `foldrWithKey`.
 * `assocs`. Delegated, using `toAscList`.
-* `keysSet`. _Unimplemented_. Note that I'm not sure whether to convert to stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
-* `fromSet`. _Unimplemented_. Note that I'm not sure whether to convert from stock `Data.IntSet` or `Data.WordSet`, which is much more in flux than `Data.WordMap`.
+* `keysSet`. Delegated, using `keys` and `Data.IntSet.fromDistinctAscList`. Note that this is only for `IntMap`, not for `WordMap`, as I'm not sure what to convert to.
+* `fromSet`. Delegated, using `Data.IntSet.toList` and `fromDistinctAscList`. Note that this is only for `IntMap`, not for `WordMap`, as I'm not sure what to convert from.
 
 #### Lists
 * `toList`. Delegated, using `toAscList`.
@@ -159,7 +159,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `mapEitherWithKey`. Raw.
 * `split`. Delegated, using `splitLookup`.
 * `splitLookup`. Raw.
-* `splitRoot`. _Unimplemented_.
+* `splitRoot`. Raw.
 
 ### Submap
 * `isSubmapOf`. Delegated, using `isSubmapOfBy`.

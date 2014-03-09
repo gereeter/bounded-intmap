@@ -1352,7 +1352,7 @@ splitLookup k = k `seq` start
 splitRoot :: WordMap a -> [WordMap a]
 splitRoot Empty = []
 splitRoot m@(NonEmpty _ _ Tip) = [m]
-splitRoot (NonEmpty min minV (Bin max maxV l r)) = [NonEmpty min minV l, W.flipBounds (NonEmpty max maxV r)]
+splitRoot (NonEmpty min minV (Bin max maxV l r)) = [NonEmpty min minV l, flipBounds (NonEmpty max maxV r)]
 
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).

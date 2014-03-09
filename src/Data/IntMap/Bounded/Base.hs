@@ -21,7 +21,7 @@ import Data.Bits (xor)
 import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap.Base as W
 
-import qualified Data.IntSet as IS
+import qualified Data.IntSet (IntSet, fromDistinctAscList)
 
 import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
@@ -566,8 +566,8 @@ assocs = toAscList
 --
 -- > keysSet (fromList [(5,"a"), (3,"b")]) == Data.IntSet.fromList [3,5]
 -- > keysSet empty == Data.IntSet.empty
-keysSet :: IntMap a -> IS.IntSet
-keysSet = IS.fromDistinctAscList . keys
+keysSet :: IntMap a -> Data.IntSet.IntSet
+keysSet = Data.IntSet.fromDistinctAscList . keys
 
 -- | /O(n)/. Convert the map to a list of key\/value pairs.
 toList :: IntMap a -> [(Key, a)]

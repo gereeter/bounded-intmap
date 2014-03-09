@@ -155,7 +155,9 @@ import Data.IntMap.Bounded.Base
 import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap.Strict as W
 
-import qualified Data.List (foldl')
+import qualified Data.IntSet (IntSet, toList)
+
+import qualified Data.List (foldl', map)
 
 import Prelude hiding (foldr, foldl, lookup, null, map, filter, min, max)
 
@@ -498,8 +500,8 @@ mapKeysMonotonic = mapKeys
 --
 -- > fromSet (\k -> replicate k 'a') (Data.IntSet.fromList [3, 5]) == fromList [(5,"aaaaa"), (3,"aaa")]
 -- > fromSet undefined Data.IntSet.empty == empty
-fromSet :: (Key -> a) -> IS.IntSet -> IntMap a
-fromSet f = fromDistinctAscList . Data.List.map (\k -> (k, f k)) . IS.toList
+fromSet :: (Key -> a) -> Data.IntSet.IntSet -> IntMap a
+fromSet f = fromDistinctAscList . Data.List.map (\k -> (k, f k)) . Data.IntSet.toList
 
 -- | /O(n*min(n,W))/. Create a map from a list of key\/value pairs.
 fromList :: [(Key, a)] -> IntMap a
