@@ -611,7 +611,7 @@ partition p (IntMap m) = let (m1, m2) = W.partition p m in (IntMap m1, IntMap m2
 -- > partitionWithKey (\ k _ -> k > 7) (fromList [(5,"a"), (3,"b")]) == (empty, fromList [(3, "b"), (5, "a")])
 partitionWithKey :: (Key -> a -> Bool) -> IntMap a -> (IntMap a, IntMap a)
 partitionWithKey p (IntMap m) = let (m1, m2) = W.partitionWithKey (p . w2i) m in (IntMap m1, IntMap m2)
-{- FIXME: Implement this properly
+
 -- | /O(min(n,W))/. The expression (@'split' k map@) is a pair @(map1,map2)@
 -- where all keys in @map1@ are lower than @k@ and all keys in
 -- @map2@ larger than @k@. Any key equal to @k@ is found in neither @map1@ nor @map2@.
@@ -622,7 +622,13 @@ partitionWithKey p (IntMap m) = let (m1, m2) = W.partitionWithKey (p . w2i) m in
 -- > split 5 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", empty)
 -- > split 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], empty)
 split :: Key -> IntMap a -> (IntMap a, IntMap a)
-split k (IntMap m) = let (m1, m2) = W.split (i2w k) m in (IntMap m1, IntMap m2)
+split k m
+    | k < 0 = let (glb, lub) = W.split (i2w k) neg
+              in (IntMap glb, IntMap (W.binL lub (W.flipBounds nonneg)))
+    | otherwise = let (glb, lub) = W.split (i2w k) nonneg
+                  in (IntMap (W.binL neg (W.flipBounds glb)), IntMap lub)
+  where
+    (neg, nonneg) = split0 m
 
 -- | /O(min(n,W))/. Performs a 'split' but also returns whether the pivot
 -- key was found in the original map.
@@ -632,9 +638,14 @@ split k (IntMap m) = let (m1, m2) = W.split (i2w k) m in (IntMap m1, IntMap m2)
 -- > splitLookup 4 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", Nothing, singleton 5 "a")
 -- > splitLookup 5 (fromList [(5,"a"), (3,"b")]) == (singleton 3 "b", Just "a", empty)
 -- > splitLookup 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], Nothing, empty)
-splitLookup :: Key -> WordMap a -> (WordMap a, Maybe a, WordMap a)
-splitLookup k (IntMap m) = let (m1, mv, m2) = W.splitLookup (i2w k) m in (IntMap m1, mv IntMap m2)
--}
+splitLookup :: Key -> IntMap a -> (IntMap a, Maybe a, IntMap a)
+splitLookup k m
+    | k < 0 = let (glb, eq, lub) = W.splitLookup (i2w k) neg
+              in (IntMap glb, eq, IntMap (W.binL lub (W.flipBounds nonneg)))
+    | otherwise = let (glb, eq, lub) = W.splitLookup (i2w k) nonneg
+                  in (IntMap (W.binL neg (W.flipBounds glb)), eq, IntMap lub)
+  where
+    (neg, nonneg) = split0 m
 
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
@@ -756,3 +767,15 @@ i2w = fromIntegral
 
 w2i :: Word -> Int
 w2i = fromIntegral
+
+-- | /O(1)/. Split a map into its negative and nonnegative parts. For internal use only.
+{-# INLINE split0 #-}
+split0 :: IntMap a -> (WordMap a, WordMap a)
+split0 (IntMap Empty) = (Empty, Empty)
+split0 (IntMap m@(NonEmpty min _ Tip))
+    | w2i min < 0 = (m, Empty)
+    | otherwise = (Empty, m)
+split0 (IntMap m@(NonEmpty min minV (Bin max maxV l r)))
+    | w2i (xor min max) < 0 = (NonEmpty min minV l, W.flipBounds (NonEmpty max maxV r))
+    | w2i max < 0 = (m, Empty)
+    | otherwise = (Empty, m)
