@@ -27,6 +27,13 @@ I deviate from Edward Kmett's implementation in a couple of ways:
 * I cache some of the computation for locating a key as I traverse the key, making it quicker to decide which way to go.
 * The values associated with each key are stored with the key instead of at the leaves.
 
+Why `WordMap`?
+--------------
+
+Although the main goal of this project is to replace `Data.IntMap`, I also expose another module, `Data.WordMap`. In fact, my `IntMap` implementation is mostly just a wrapper of the `WordMap` code. The primary reason for this is code readability. Fundamentally, the data structure implemented here is a trie, and wants to work with lexographically ordered strings of bits. `Word`s have the correct ordering and more naturally fit the idea of bitstring than an `Int`, which is used for arithmetic. Given that I, unlike the previous `Data.IntMap`, actually use comparisons, the convenience for using `Word`s is even larger. The decision to expose `Data.WordMap` was then a simple one: I had already written the code, so why not?
+
+Secondarily, I believe that the Haskell community doesn't use `Word`s enough, even when they are most applicable (which is weird, given the love of more accurately showing invariants in the type system), and having some libraries that actually use them would help.
+
 Benchmark Results
 -----------------
 The criterion report is [here](http://gereeter.github.io/bounded-intmap/report.html).
