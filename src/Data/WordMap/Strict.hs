@@ -165,30 +165,30 @@ singleton k v = v `seq` NonEmpty k v Tip
 -- If the key is already present in the map, the associated value
 -- is replaced with the supplied value.
 insert :: Key -> a -> WordMap a -> WordMap a
-insert k v = k `seq` v `seq` start
+insert = start
   where
-    start Empty = NonEmpty k v Tip
-    start (NonEmpty min minV root)
-        | k > min = NonEmpty min minV (goL (xor min k) min root)
+    start !k !v Empty = NonEmpty k v Tip
+    start !k !v (NonEmpty min minV root)
+        | k > min = NonEmpty min minV (goL k v (xor min k) min root)
         | k < min = NonEmpty k v (endL (xor min k) min minV root)
         | otherwise = NonEmpty k v root
     
-    goL !_        _    Tip = Bin k v Tip Tip
-    goL !xorCache min (Bin max maxV l r)
+    goL !k v !_        _    Tip = Bin k v Tip Tip
+    goL !k v !xorCache min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goL xorCache min l) r
-                    else Bin max maxV l (goR xorCacheMax max r)
+                    then Bin max maxV (goL k v xorCache min l) r
+                    else Bin max maxV l (goR k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
                     else Bin k v l (endR xorCacheMax max maxV r)
         | otherwise = Bin max v l r
       where xorCacheMax = xor k max
 
-    goR !_        _    Tip = Bin k v Tip Tip
-    goR !xorCache max (Bin min minV l r)
+    goR !k v !_        !_    Tip = Bin k v Tip Tip
+    goR !k v !xorCache !max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goR xorCache max r)
-                    else Bin min minV (goL xorCacheMin min l) r
+                    then Bin min minV l (goR k v xorCache max r)
+                    else Bin min minV (goL k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
                     else Bin k v (endL xorCacheMin min minV l) r
@@ -219,30 +219,30 @@ insert k v = k `seq` v `seq` start
 -- > insertWith (++) 7 "xxx" (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "a"), (7, "xxx")]
 -- > insertWith (++) 5 "xxx" empty                         == singleton 5 "xxx"
 insertWith :: (a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
-insertWith combine k v = k `seq` start
+insertWith combine = start
   where
-    start Empty = NonEmpty k v Tip
-    start (NonEmpty min minV root)
-        | k > min = NonEmpty min minV (goL (xor min k) min root)
+    start !k v Empty = NonEmpty k #! v # Tip
+    start !k v (NonEmpty min minV root)
+        | k > min = NonEmpty min minV (goL k v (xor min k) min root)
         | k < min = NonEmpty k #! v # endL (xor min k) min minV root
         | otherwise = NonEmpty k #! combine v minV # root
     
-    goL !_        _    Tip = Bin k #! v # Tip # Tip
-    goL !xorCache min (Bin max maxV l r)
+    goL !k v !_        _    Tip = Bin k #! v # Tip # Tip
+    goL !k v !xorCache min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goL xorCache min l) r
-                    else Bin max maxV l (goR xorCacheMax max r)
+                    then Bin max maxV (goL k v xorCache min l) r
+                    else Bin max maxV l (goR k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k #! v # Bin max maxV l r # Tip
                     else Bin k #! v # l # endR xorCacheMax max maxV r
         | otherwise = Bin max #! combine v maxV # l # r
       where xorCacheMax = xor k max
 
-    goR !_        _    Tip = Bin k #! v # Tip # Tip
-    goR !xorCache max (Bin min minV l r)
+    goR !k v !_        _    Tip = Bin k #! v # Tip # Tip
+    goR !k v !xorCache max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goR xorCache max r)
-                    else Bin min minV (goL xorCacheMin min l) r
+                    then Bin min minV l (goR k v xorCache max r)
+                    else Bin min minV (goL k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k #! v # Tip # Bin min minV l r
                     else Bin k #! v # endL xorCacheMin min minV l # r
