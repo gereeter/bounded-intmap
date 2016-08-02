@@ -171,8 +171,8 @@ insert = start
         | k < min = NonEmpty k v (endL (xor min k) min minV root)
         | otherwise = NonEmpty k v root
     
-    goL !k v !_        _    Tip = Bin k v Tip Tip
-    goL !k v !xorCache min (Bin max maxV l r)
+    goL !k v !_        !_    Tip = Bin k v Tip Tip
+    goL !k v !xorCache !min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
                     then Bin max maxV (goL k v xorCache min l) r
                     else Bin max maxV l (goR k v xorCacheMax max r)
@@ -182,8 +182,8 @@ insert = start
         | otherwise = Bin max v l r
       where xorCacheMax = xor k max
 
-    goR !k v !_        _    Tip = Bin k v Tip Tip
-    goR !k v !xorCache max (Bin min minV l r)
+    goR !k v !_        !_    Tip = Bin k v Tip Tip
+    goR !k v !xorCache !max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
                     then Bin min minV l (goR k v xorCache max r)
                     else Bin min minV (goL k v xorCacheMin min l) r
