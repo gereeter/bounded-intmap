@@ -394,10 +394,7 @@ delete k = k `seq` start
                     then Bin max maxV (goL xorCache l) r
                     else Bin max maxV l (goR xorCacheMax r)
         | k > max = n
-        | otherwise = case r of
-            Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
-                                    in  Bin max' maxV' l r'
+        | otherwise = extractBinL l r
       where xorCacheMax = xor k max
     
     goR !_           Tip = Tip
@@ -406,10 +403,7 @@ delete k = k `seq` start
                     then Bin min minV l (goR xorCache r)
                     else Bin min minV (goL xorCacheMin l) r
         | k < min = n
-        | otherwise = case l of
-            Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
-                                    in  Bin min' minV' l' r
+        | otherwise = extractBinR l r
       where xorCacheMin = xor min k
 
 -- TODO: Does a strict pair work? My guess is not, as GHC was already
@@ -722,10 +716,7 @@ difference = start
                     then Bin max maxV (goDeleteL k xorCache l) r
                     else Bin max maxV l (goDeleteR k xorCacheMax r)
         | k > max = n
-        | otherwise = case r of
-            Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
-                                    in  Bin max' maxV' l r'
+        | otherwise = extractBinL l r
       where xorCacheMax = xor k max
     
     goDeleteR _ !_           Tip = Tip
@@ -734,10 +725,7 @@ difference = start
                     then Bin min minV l (goDeleteR k xorCache r)
                     else Bin min minV (goDeleteL k xorCacheMin l) r
         | k < min = n
-        | otherwise = case l of
-            Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
-                                    in  Bin min' minV' l' r
+        | otherwise = extractBinR l r
       where xorCacheMin = xor min k
     
     dummyV = error "impossible"
@@ -1718,3 +1706,17 @@ deleteMaxR !min minV (Bin max maxV l r) Tip = DR max maxV (Bin min minV l r)
 deleteMaxR !min minV l (Bin innerMin innerMinV innerL innerR) =
     let DR max maxV inner = deleteMaxR innerMin innerMinV innerL innerR
     in  DR max maxV (Bin min minV l inner)
+
+-- | Combine two disjoint nodes into a new left node. This is not cheap.
+extractBinL :: Node a -> Node a -> Node a
+extractBinL l Tip = l
+extractBinL l (Bin min minV innerL innerR) =
+    let DR max maxV r = deleteMaxR min minV innerL innerR
+    in Bin max maxV l r
+
+-- | Combine two disjoint nodes into a new right node. This is not cheap.
+extractBinR :: Node a -> Node a -> Node a
+extractBinR Tip r = r
+extractBinR (Bin max maxV innerL innerR) r =
+    let DR min minV l = deleteMinL max maxV innerL innerR
+    in Bin min minV l r

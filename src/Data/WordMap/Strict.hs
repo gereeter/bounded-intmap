@@ -383,10 +383,7 @@ update f k = k `seq` start
                     else Bin max maxV l (goR xorCacheMax max r)
         | k > max = n
         | otherwise = case f maxV of
-            Nothing -> case r of
-                Tip -> l
-                Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
-                                        in  Bin max' maxV' l r'
+            Nothing -> extractBinL l r
             Just !maxV' -> Bin max maxV' l r
       where xorCacheMax = xor k max
     
@@ -397,10 +394,7 @@ update f k = k `seq` start
                     else Bin min minV (goL xorCacheMin min l) r
         | k < min = n
         | otherwise = case f minV of
-            Nothing -> case l of
-                Tip -> r
-                Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
-                                        in  Bin min' minV' l' r
+            Nothing -> extractBinR l r
             Just !minV' -> Bin min minV' l r
       where xorCacheMin = xor min k
 
@@ -451,10 +445,7 @@ updateLookupWithKey f k = k `seq` start
                          in  (mv, Bin max maxV l r')
         | k > max = (Nothing, n)
         | otherwise = case f max maxV of
-            Nothing -> case r of
-                Tip -> (Just maxV, l)
-                Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
-                                        in (Just maxV, Bin max' maxV' l r')
+            Nothing -> (Just maxV, extractBinL l r)
             Just !maxV' -> (Just maxV, Bin max maxV' l r)
       where xorCacheMax = xor k max
     
@@ -467,10 +458,7 @@ updateLookupWithKey f k = k `seq` start
                          in  (mv, Bin min minV l' r)
         | k < min = (Nothing, n)
         | otherwise = case f min minV of
-            Nothing -> case l of
-                Tip -> (Just minV, r)
-                Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
-                                        in (Just minV, Bin min' minV' l' r)
+            Nothing -> (Just minV, extractBinR l r)
             Just !minV' -> (Just minV, Bin min minV' l r)
       where xorCacheMin = xor min k
 
@@ -862,10 +850,7 @@ differenceWithKey combine = start
                     then Bin max maxV (goDeleteL k xorCache l) r
                     else Bin max maxV l (goDeleteR k xorCacheMax r)
         | k > max = n
-        | otherwise = case r of
-            Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
-                                    in  Bin max' maxV' l r'
+        | otherwise = extractBinL l r
       where xorCacheMax = xor k max
     
     goDeleteR _ !_           Tip = Tip
@@ -874,10 +859,7 @@ differenceWithKey combine = start
                     then Bin min minV l (goDeleteR k xorCache r)
                     else Bin min minV (goDeleteL k xorCacheMin l) r
         | k < min = n
-        | otherwise = case l of
-            Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
-                                    in  Bin min' minV' l' r
+        | otherwise = extractBinR l r
       where xorCacheMin = xor min k
     
     dummyV = error "impossible"
