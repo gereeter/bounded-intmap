@@ -90,11 +90,18 @@ instance NFData a => NFData (Node a) where
 (\\) = difference
 
 -- | /O(1)/. Is the map empty?
+--
+-- > Data.WordMap.null empty             == True
+-- > Data.WordMap.null (singleton 1 'a') == False
 null :: WordMap a -> Bool
 null Empty = True
 null _ = False
 
 -- | /O(n)/. Number of elements in the map.
+--
+-- > size empty                                   == 0
+-- > size (singleton 1 'a')                       == 1
+-- > size (fromList([(1,'a'), (2,'c'), (3,'b')])) == 3
 size :: WordMap a -> Int
 size Empty = 0
 size (NonEmpty _ _ node) = sizeNode node where
@@ -102,6 +109,9 @@ size (NonEmpty _ _ node) = sizeNode node where
     sizeNode (Bin _ _ l r) = sizeNode l + sizeNode r
 
 -- | /O(min(n,W))/. Is the key a member of the map?
+--
+-- > member 5 (fromList [(5,'a'), (3,'b')]) == True
+-- > member 1 (fromList [(5,'a'), (3,'b')]) == False
 member :: Key -> WordMap a -> Bool
 member k = k `seq` start
   where
@@ -130,6 +140,9 @@ member k = k `seq` start
       where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Is the key not a member of the map?
+--
+-- > notMember 5 (fromList [(5,'a'), (3,'b')]) == False
+-- > notMember 1 (fromList [(5,'a'), (3,'b')]) == True
 notMember :: Key -> WordMap a -> Bool
 notMember k = k `seq` start
   where
@@ -157,7 +170,7 @@ notMember k = k `seq` start
         | otherwise = False
       where xorCacheMin = xor min k
 
--- | /O(min(n,W))/. Lookup the value at a key in the map.
+-- | /O(min(n,W))/. Lookup the value at a key in the map. See also 'Data.Map.lookup'.
 lookup :: Key -> WordMap a -> Maybe a
 lookup k = k `seq` start
   where
@@ -185,9 +198,12 @@ lookup k = k `seq` start
         | otherwise = Just minV
       where xorCacheMin = xor min k
 
--- | /O(min(n,W))/. The expression @findWithDefault def k map@ returns
--- the value at key @k@ or returns @def@ when the key is not an element
--- of the map. 
+-- | /O(min(n,W))/. The expression @'findWithDefault' def k map@
+-- returns the value at key @k@ or returns @def@ when the key is not an
+-- element of the map.
+--
+-- > findWithDefault 'x' 1 (fromList [(5,'a'), (3,'b')]) == 'x'
+-- > findWithDefault 'x' 5 (fromList [(5,'a'), (3,'b')]) == 'a'
 findWithDefault :: a -> Key -> WordMap a -> a
 findWithDefault def k = k `seq` start
   where
@@ -352,6 +368,9 @@ lookupGE k = k `seq` start
     getMin _   _   (Bin min minV _ _) = (min, minV)
 
 -- | /O(1)/. The empty map.
+--
+-- > empty      == fromList []
+-- > size empty == 0
 empty :: WordMap a
 empty = Empty
 

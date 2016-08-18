@@ -7,11 +7,11 @@
 module Data.WordMap.Strict (
     -- * Map type
       WordMap, Key
-    
+
     -- * Operators
     , (!)
     , (\\)
-    
+
     -- * Query
     , null
     , size
@@ -23,17 +23,17 @@ module Data.WordMap.Strict (
     , lookupGT
     , lookupLE
     , lookupGE
-    
+
     -- * Construction
     , empty
     , singleton
-    
+
     -- ** Insertion
     , insert
     , insertWith
     , insertWithKey
     , insertLookupWithKey
-    
+
     -- ** Delete\/Update
     , delete
     , adjust
@@ -42,7 +42,7 @@ module Data.WordMap.Strict (
     , updateWithKey
     , updateLookupWithKey
     , alter
-    
+
     -- * Combine
     -- ** Union
     , union
@@ -50,17 +50,17 @@ module Data.WordMap.Strict (
     , unionWithKey
     , unions
     , unionsWith
-    
+
     -- ** Difference
     , difference
     , differenceWith
     , differenceWithKey
-    
+
     -- ** Intersection
     , intersection
     , intersectionWith
     , intersectionWithKey
-    
+
     -- * Traversal
     -- ** Map
     , map
@@ -72,31 +72,31 @@ module Data.WordMap.Strict (
     , mapKeys
     , mapKeysWith
     , mapKeysMonotonic
-    
+
     -- * Folds
     , foldr
     , foldl
     , foldrWithKey
     , foldlWithKey
     , foldMapWithKey
-    
+
     -- ** Strict folds
     , foldr'
     , foldl'
     , foldrWithKey'
     , foldlWithKey'
-    
+
     -- * Conversion
     , elems
     , keys
     , assocs
-    
+
     -- ** Lists
     , toList
     , fromList
     , fromListWith
     , fromListWithKey
-    
+
     -- ** Ordered Lists
     , toAscList
     , toDescList
@@ -104,7 +104,7 @@ module Data.WordMap.Strict (
     , fromAscListWith
     , fromAscListWithKey
     , fromDistinctAscList
-    
+
     -- * Filter
     , filter
     , filterWithKey
@@ -117,7 +117,13 @@ module Data.WordMap.Strict (
     , split
     , splitLookup
     , splitRoot
-    
+
+    -- * Submap
+    , isSubmapOf
+    , isSubmapOfBy
+    , isProperSubmapOf
+    , isProperSubmapOfBy
+
     -- * Min\/Max
     , findMin
     , findMax
@@ -133,11 +139,7 @@ module Data.WordMap.Strict (
     , maxView
     , minViewWithKey
     , maxViewWithKey
-    
-    -- * Submap
-    , isSubmapOf
-    , isSubmapOfBy
-    
+
     -- * Debugging
     , showTree
     , valid
@@ -158,12 +160,20 @@ import Prelude hiding (foldr, foldl, lookup, null, map, filter, min, max)
 (#) = ($)
 
 -- | /O(1)/. A map of one element.
+--
+-- > singleton 1 'a'        == fromList [(1, 'a')]
+-- > size (singleton 1 'a') == 1
 singleton :: Key -> a -> WordMap a
 singleton k v = v `seq` NonEmpty k v Tip
 
 -- | /O(min(n,W))/. Insert a new key\/value pair in the map.
--- If the key is already present in the map, the associated value
--- is replaced with the supplied value.
+-- If the key is already present in the map, the associated value is
+-- replaced with the supplied value, i.e. 'insert' is equivalent to
+-- @'insertWith' 'const'@
+--
+-- > insert 5 'x' (fromList [(5,'a'), (3,'b')]) == fromList [(3, 'b'), (5, 'x')]
+-- > insert 7 'x' (fromList [(5,'a'), (3,'b')]) == fromList [(3, 'b'), (5, 'a'), (7, 'x')]
+-- > insert 5 'x' empty                         == singleton 5 'x'
 insert :: Key -> a -> WordMap a -> WordMap a
 insert = start
   where
