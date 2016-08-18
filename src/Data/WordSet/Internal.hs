@@ -25,7 +25,7 @@ data Node = Bin {-# UNPACK #-} !Key !Node !Node | BM {-# UNPACK #-} !Key {-# UNP
 instance Show WordSet where
     show m = "fromList " ++ show (toList m)
 
-instance NFData WordSet
+-- instance NFData WordSet
 
 -- | /O(n+m)/. See 'difference'.
 (\\) :: WordSet -> WordSet -> WordSet
