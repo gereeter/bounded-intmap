@@ -180,7 +180,7 @@ insert = start
     start !k !v Empty = NonEmpty k v Tip
     start !k !v (NonEmpty min minV root)
         | k > min = NonEmpty min minV (goL k v (xor min k) min root)
-        | k < min = NonEmpty k v (endL (xor min k) min minV root)
+        | k < min = NonEmpty k v (insertMinL (xor min k) min minV root)
         | otherwise = NonEmpty k v root
     
     goL !k v !_        !_    Tip = Bin k v Tip Tip
@@ -190,7 +190,7 @@ insert = start
                     else Bin max maxV l (goR k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
-                    else Bin k v l (endR xorCacheMax max maxV r)
+                    else Bin k v l (insertMaxR xorCacheMax max maxV r)
         | otherwise = Bin max v l r
       where xorCacheMax = xor k max
 
@@ -201,23 +201,9 @@ insert = start
                     else Bin min minV (goL k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
-                    else Bin k v (endL xorCacheMin min minV l) r
+                    else Bin k v (insertMinL xorCacheMin min minV l) r
         | otherwise = Bin min v l r
       where xorCacheMin = xor min k
-    
-    endL !xorCache min minV = go
-      where
-        go Tip = Bin min minV Tip Tip
-        go (Bin max maxV l r)
-            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (go l) r
-
-    endR !xorCache max maxV = go
-      where
-        go Tip = Bin max maxV Tip Tip
-        go (Bin min minV l r)
-            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (go r)
 
 -- | /O(min(n,W))/. Insert with a combining function.
 -- @'insertWith' f key value mp@
@@ -234,7 +220,7 @@ insertWith combine = start
     start !k v Empty = NonEmpty k #! v # Tip
     start !k v (NonEmpty min minV root)
         | k > min = NonEmpty min minV (goL k v (xor min k) min root)
-        | k < min = NonEmpty k #! v # endL (xor min k) min minV root
+        | k < min = NonEmpty k #! v # insertMinL (xor min k) min minV root
         | otherwise = NonEmpty k #! combine v minV # root
     
     goL !k v !_        !_    Tip = Bin k #! v # Tip # Tip
@@ -244,7 +230,7 @@ insertWith combine = start
                     else Bin max maxV l (goR k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k #! v # Bin max maxV l r # Tip
-                    else Bin k #! v # l # endR xorCacheMax max maxV r
+                    else Bin k #! v # l # insertMaxR xorCacheMax max maxV r
         | otherwise = Bin max #! combine v maxV # l # r
       where xorCacheMax = xor k max
 
@@ -255,23 +241,9 @@ insertWith combine = start
                     else Bin min minV (goL k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k #! v # Tip # Bin min minV l r
-                    else Bin k #! v # endL xorCacheMin min minV l # r
+                    else Bin k #! v # insertMinL xorCacheMin min minV l # r
         | otherwise = Bin min #! combine v minV # l # r
       where xorCacheMin = xor min k
-    
-    endL !xorCache min minV = finishL
-      where
-        finishL Tip = Bin min minV Tip Tip
-        finishL (Bin max maxV l r)
-            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (finishL l) r
-
-    endR !xorCache max maxV = finishR
-      where
-        finishR Tip = Bin max maxV Tip Tip
-        finishR (Bin min minV l r)
-            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (finishR r)
 
 -- | /O(min(n,W))/. Insert with a combining function.
 -- @'insertWithKey' f key value mp@
@@ -307,7 +279,7 @@ insertLookupWithKey combine k v = k `seq` start
     start (NonEmpty min minV root)
         | k > min = let (mv, root') = goL (xor min k) min root
                     in  (mv, NonEmpty min minV root')
-        | k < min = (Nothing, NonEmpty k #! v # endL (xor min k) min minV root)
+        | k < min = (Nothing, NonEmpty k #! v # insertMinL (xor min k) min minV root)
         | otherwise = (Just minV, NonEmpty k #! combine k v minV # root)
     
     goL !_        _    Tip = (Nothing, Bin k #! v # Tip # Tip)
@@ -319,7 +291,7 @@ insertLookupWithKey combine k v = k `seq` start
                          in  (mv, Bin max maxV l r')
         | k > max = if xor min max < xorCacheMax
                     then (Nothing, Bin k #! v # Bin max maxV l r # Tip)
-                    else (Nothing, Bin k #! v # l # endR xorCacheMax max maxV r)
+                    else (Nothing, Bin k #! v # l # insertMaxR xorCacheMax max maxV r)
         | otherwise = (Just maxV, Bin max #! combine k v maxV # l # r)
       where xorCacheMax = xor k max
 
@@ -332,23 +304,9 @@ insertLookupWithKey combine k v = k `seq` start
                          in  (mv, Bin min minV l' r)
         | k < min = if xor min max < xorCacheMin
                     then (Nothing, Bin k #! v # Tip # Bin min minV l r)
-                    else (Nothing, Bin k #! v # endL xorCacheMin min minV l # r)
+                    else (Nothing, Bin k #! v # insertMinL xorCacheMin min minV l # r)
         | otherwise = (Just minV, Bin min #! combine k v minV # l # r)
       where xorCacheMin = xor min k
-    
-    endL !xorCache min minV = finishL
-      where
-        finishL Tip = Bin min minV Tip Tip
-        finishL (Bin max maxV l r)
-            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (finishL l) r
-
-    endR !xorCache max maxV = finishR
-      where
-        finishR Tip = Bin max maxV Tip Tip
-        finishR (Bin min minV l r)
-            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (finishR r)
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.
@@ -413,7 +371,7 @@ update f k = k `seq` start
     start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
         | k == min = case f minV of
-            Nothing -> let DR min' minV' root' = goDeleteMin max maxV l r
+            Nothing -> let DR min' minV' root' = deleteMinL max maxV l r
                        in NonEmpty min' minV' root'
             Just !minV' -> NonEmpty min minV' root
         | otherwise = NonEmpty min minV (goL (xor min k) min root)
@@ -427,7 +385,7 @@ update f k = k `seq` start
         | otherwise = case f maxV of
             Nothing -> case r of
                 Tip -> l
-                Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
                                         in  Bin max' maxV' l r'
             Just !maxV' -> Bin max maxV' l r
       where xorCacheMax = xor k max
@@ -441,24 +399,10 @@ update f k = k `seq` start
         | otherwise = case f minV of
             Nothing -> case l of
                 Tip -> r
-                Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
                                         in  Bin min' minV' l' r
             Just !minV' -> Bin min minV' l r
       where xorCacheMin = xor min k
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
 
 -- | /O(min(n,W))/. The expression (@'updateWithKey' f k map@) updates the value @x@
 -- at @k@ (if it is in the map). If (@f k x@) is 'Nothing', the element is
@@ -492,7 +436,7 @@ updateLookupWithKey f k = k `seq` start
     start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = (Nothing, m)
         | k == min = case f min minV of
-            Nothing -> let DR min' minV' root' = goDeleteMin max maxV l r
+            Nothing -> let DR min' minV' root' = deleteMinL max maxV l r
                        in (Just minV, NonEmpty min' minV' root')
             Just !minV' -> (Just minV, NonEmpty min minV' root)
         | otherwise = let (mv, root') = goL (xor min k) min root
@@ -509,7 +453,7 @@ updateLookupWithKey f k = k `seq` start
         | otherwise = case f max maxV of
             Nothing -> case r of
                 Tip -> (Just maxV, l)
-                Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+                Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
                                         in (Just maxV, Bin max' maxV' l r')
             Just !maxV' -> (Just maxV, Bin max maxV' l r)
       where xorCacheMax = xor k max
@@ -525,24 +469,10 @@ updateLookupWithKey f k = k `seq` start
         | otherwise = case f min minV of
             Nothing -> case l of
                 Tip -> (Just minV, r)
-                Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+                Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
                                         in (Just minV, Bin min' minV' l' r)
             Just !minV' -> (Just minV, Bin min minV' l r)
       where xorCacheMin = xor min k
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
 
 -- | /O(min(n,W))/. The expression (@'alter' f k map@) alters the value @x@ at @k@, or absence thereof.
 -- 'alter' can be used to insert, delete, or update a value in an 'IntMap'.
@@ -577,7 +507,7 @@ unionWithKey combine = start
     -- TODO: Should I cache @xor min1 min2@?
     goL1 minV1 min1 Tip !_   Tip = Bin min1 minV1 Tip Tip
     goL1 minV1 min1 Tip min2 n2  = goInsertL1 min1 minV1 (xor min1 min2) min2 n2
-    goL1 minV1 min1 n1  min2 Tip = endL (xor min1 min2) min1 minV1 n1
+    goL1 minV1 min1 n1  min2 Tip = insertMinL (xor min1 min2) min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 min1 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
@@ -596,7 +526,7 @@ unionWithKey combine = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goL2 minV2 !_   Tip min2 Tip = Bin min2 minV2 Tip Tip
-    goL2 minV2 min1 Tip min2 n2  = endL (xor min1 min2) min2 minV2 n2
+    goL2 minV2 min1 Tip min2 n2  = insertMinL (xor min1 min2) min2 minV2 n2
     goL2 minV2 min1 n1  min2 Tip = goInsertL2 min2 minV2 (xor min1 min2) min1 n1
     goL2 minV2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -630,7 +560,7 @@ unionWithKey combine = start
     -- TODO: Should I cache @xor max1 max2@?
     goR1 maxV1 max1 Tip !_   Tip = Bin max1 maxV1 Tip Tip
     goR1 maxV1 max1 Tip max2 n2  = goInsertR1 max1 maxV1 (xor max1 max2) max2 n2
-    goR1 maxV1 max1 n1  max2 Tip = endR (xor max1 max2) max1 maxV1 n1
+    goR1 maxV1 max1 n1  max2 Tip = insertMaxR (xor max1 max2) max1 maxV1 n1
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 max1 > xor max1 max2 -> Bin min2 minV2 l2 (goR1 maxV1 max1 n1 max2 r2) -- we choose max1 arbitrarily - we just need something from tree 1
@@ -649,7 +579,7 @@ unionWithKey combine = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goR2 maxV2 !_   Tip max2   Tip = Bin max2 maxV2 Tip Tip
-    goR2 maxV2 max1 Tip max2 n2  = endR (xor max1 max2) max2 maxV2 n2
+    goR2 maxV2 max1 Tip max2 n2  = insertMaxR (xor max1 max2) max2 maxV2 n2
     goR2 maxV2 max1 n1  max2 Tip = goInsertR2 max2 maxV2 (xor max1 max2) max1 n1
     goR2 maxV2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -686,7 +616,7 @@ unionWithKey combine = start
                     else Bin max maxV l (goInsertR1 k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
-                    else Bin k v l (endR xorCacheMax max maxV r)
+                    else Bin k v l (insertMaxR xorCacheMax max maxV r)
         | otherwise = Bin max #! combine k v maxV # l # r
       where xorCacheMax = xor k max
 
@@ -697,7 +627,7 @@ unionWithKey combine = start
                     else Bin min minV (goInsertL1 k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
-                    else Bin k v (endL xorCacheMin min minV l) r
+                    else Bin k v (insertMinL xorCacheMin min minV l) r
         | otherwise = Bin min #! combine k v minV # l # r
       where xorCacheMin = xor min k
     
@@ -708,7 +638,7 @@ unionWithKey combine = start
                     else Bin max maxV l (goInsertR2 k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
-                    else Bin k v l (endR xorCacheMax max maxV r)
+                    else Bin k v l (insertMaxR xorCacheMax max maxV r)
         | otherwise = Bin max #! combine k maxV v # l # r
       where xorCacheMax = xor k max
 
@@ -719,23 +649,9 @@ unionWithKey combine = start
                     else Bin min minV (goInsertL2 k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
-                    else Bin k v (endL xorCacheMin min minV l) r
+                    else Bin k v (insertMinL xorCacheMin min minV l) r
         | otherwise = Bin min #! combine k minV v # l # r
       where xorCacheMin = xor min k
-    
-    endL !xorCache min minV = finishL
-      where
-        finishL Tip = Bin min minV Tip Tip
-        finishL (Bin max maxV l r)
-            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (finishL l) r
-
-    endR !xorCache max maxV = finishR
-      where
-        finishR Tip = Bin max maxV Tip Tip
-        finishR (Bin min minV l r)
-            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (finishR r)
 
 -- | The union of a list of maps, with a combining operation.
 --
@@ -817,7 +733,7 @@ differenceWithKey combine = start
     goLFused min = loop
       where
         loop Tip !_ = Empty
-        loop (Bin max1 maxV1 l1 r1) Tip = case goDeleteMin max1 maxV1 l1 r1 of
+        loop (Bin max1 maxV1 l1 r1) Tip = case deleteMinL max1 maxV1 l1 r1 of
             DR min' minV' n' -> NonEmpty min' minV' n'
         loop n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min max1) (xor min max2) of
             LT -> loop n1 l2
@@ -890,7 +806,7 @@ differenceWithKey combine = start
     goRFused max = loop
       where
         loop Tip !_ = Empty
-        loop (Bin min1 minV1 l1 r1) Tip = case goDeleteMax min1 minV1 l1 r1 of
+        loop (Bin min1 minV1 l1 r1) Tip = case deleteMaxR min1 minV1 l1 r1 of
             DR max' maxV' n' -> NonEmpty max' maxV' n'
         loop n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
             LT -> loop n1 r2
@@ -948,7 +864,7 @@ differenceWithKey combine = start
         | k > max = n
         | otherwise = case r of
             Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
                                     in  Bin max' maxV' l r'
       where xorCacheMax = xor k max
     
@@ -960,23 +876,9 @@ differenceWithKey combine = start
         | k < min = n
         | otherwise = case l of
             Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
                                     in  Bin min' minV' l' r
       where xorCacheMin = xor min k
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
     
     dummyV = error "impossible"
 

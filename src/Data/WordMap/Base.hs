@@ -385,7 +385,7 @@ delete k = k `seq` start
         | otherwise = m
     start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
-        | k == min = let DR min' minV' root' = goDeleteMin max maxV l r in NonEmpty min' minV' root'
+        | k == min = let DR min' minV' root' = deleteMinL max maxV l r in NonEmpty min' minV' root'
         | otherwise = NonEmpty min minV (goL (xor min k) root)
     
     goL !_           Tip = Tip
@@ -396,7 +396,7 @@ delete k = k `seq` start
         | k > max = n
         | otherwise = case r of
             Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
                                     in  Bin max' maxV' l r'
       where xorCacheMax = xor k max
     
@@ -408,23 +408,9 @@ delete k = k `seq` start
         | k < min = n
         | otherwise = case l of
             Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
                                     in  Bin min' minV' l' r
       where xorCacheMin = xor min k
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
 
 -- TODO: Does a strict pair work? My guess is not, as GHC was already
 -- unboxing the tuple, but it would be simpler to use one of those.
@@ -452,7 +438,7 @@ union = start
     -- TODO: Should I cache @xor min1 min2@?
     goL1 minV1 min1 Tip !_   Tip = Bin min1 minV1 Tip Tip
     goL1 minV1 min1 Tip min2 n2  = goInsertL1 min1 minV1 (xor min1 min2) min2 n2
-    goL1 minV1 min1 n1  min2 Tip = endL (xor min1 min2) min1 minV1 n1
+    goL1 minV1 min1 n1  min2 Tip = insertMinL (xor min1 min2) min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 min1 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
@@ -471,7 +457,7 @@ union = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goL2 minV2 !_   Tip min2 Tip = Bin min2 minV2 Tip Tip
-    goL2 minV2 min1 Tip min2 n2  = endL (xor min1 min2) min2 minV2 n2
+    goL2 minV2 min1 Tip min2 n2  = insertMinL (xor min1 min2) min2 minV2 n2
     goL2 minV2 min1 n1  min2 Tip = goInsertL2 min2 minV2 (xor min1 min2) min1 n1
     goL2 minV2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -505,7 +491,7 @@ union = start
     -- TODO: Should I cache @xor max1 max2@?
     goR1 maxV1 max1 Tip !_   Tip = Bin max1 maxV1 Tip Tip
     goR1 maxV1 max1 Tip max2 n2  = goInsertR1 max1 maxV1 (xor max1 max2) max2 n2
-    goR1 maxV1 max1 n1  max2 Tip = endR (xor max1 max2) max1 maxV1 n1
+    goR1 maxV1 max1 n1  max2 Tip = insertMaxR (xor max1 max2) max1 maxV1 n1
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
             | xor min2 max1 > xor max1 max2 -> Bin min2 minV2 l2 (goR1 maxV1 max1 n1 max2 r2) -- we choose max1 arbitrarily - we just need something from tree 1
@@ -524,7 +510,7 @@ union = start
     -- TODO: Should I bind 'minV2' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
     goR2 maxV2 !_   Tip max2   Tip = Bin max2 maxV2 Tip Tip
-    goR2 maxV2 max1 Tip max2 n2  = endR (xor max1 max2) max2 maxV2 n2
+    goR2 maxV2 max1 Tip max2 n2  = insertMaxR (xor max1 max2) max2 maxV2 n2
     goR2 maxV2 max1 n1  max2 Tip = goInsertR2 max2 maxV2 (xor max1 max2) max1 n1
     goR2 maxV2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor max1 max2 -> disjoint -- we choose max1 and max2 arbitrarily - we just need something from tree 1 and something from tree 2
@@ -561,7 +547,7 @@ union = start
                     else Bin max maxV l (goInsertR1 k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
-                    else Bin k v l (endR xorCacheMax max maxV r)
+                    else Bin k v l (insertMaxR xorCacheMax max maxV r)
         | otherwise = Bin max v l r
       where xorCacheMax = xor k max
 
@@ -572,7 +558,7 @@ union = start
                     else Bin min minV (goInsertL1 k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
-                    else Bin k v (endL xorCacheMin min minV l) r
+                    else Bin k v (insertMinL xorCacheMin min minV l) r
         | otherwise = Bin min v l r
       where xorCacheMin = xor min k
     
@@ -583,7 +569,7 @@ union = start
                     else Bin max maxV l (goInsertR2 k v xorCacheMax max r)
         | k > max = if xor min max < xorCacheMax
                     then Bin k v (Bin max maxV l r) Tip
-                    else Bin k v l (endR xorCacheMax max maxV r)
+                    else Bin k v l (insertMaxR xorCacheMax max maxV r)
         | otherwise = Bin max maxV l r
       where xorCacheMax = xor k max
 
@@ -594,23 +580,9 @@ union = start
                     else Bin min minV (goInsertL2 k v xorCacheMin min l) r
         | k < min = if xor min max < xorCacheMin
                     then Bin k v Tip (Bin min minV l r)
-                    else Bin k v (endL xorCacheMin min minV l) r
+                    else Bin k v (insertMinL xorCacheMin min minV l) r
         | otherwise = Bin min minV l r
       where xorCacheMin = xor min k
-    
-    endL !xorCache min minV = finishL
-      where
-        finishL Tip = Bin min minV Tip Tip
-        finishL (Bin max maxV l r)
-            | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
-            | otherwise = Bin max maxV (finishL l) r
-
-    endR !xorCache max maxV = finishR
-      where
-        finishR Tip = Bin max maxV Tip Tip
-        finishR (Bin min minV l r)
-            | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
-            | otherwise = Bin min minV l (finishR r)
 
 -- | The union of a list of maps.
 --
@@ -671,7 +643,7 @@ difference = start
     goLFused min = loop
       where
         loop Tip !_ = Empty
-        loop (Bin max1 maxV1 l1 r1) Tip = case goDeleteMin max1 maxV1 l1 r1 of
+        loop (Bin max1 maxV1 l1 r1) Tip = case deleteMinL max1 maxV1 l1 r1 of
             DR min' minV' n' -> NonEmpty min' minV' n'
         loop n1@(Bin max1 maxV1 l1 r1) n2@(Bin max2 _ l2 r2) = case compareMSB (xor min max1) (xor min max2) of
             LT -> loop n1 l2
@@ -717,7 +689,7 @@ difference = start
     goRFused max = loop
       where
         loop Tip !_ = Empty
-        loop (Bin min1 minV1 l1 r1) Tip = case goDeleteMax min1 minV1 l1 r1 of
+        loop (Bin min1 minV1 l1 r1) Tip = case deleteMaxR min1 minV1 l1 r1 of
             DR max' maxV' n' -> NonEmpty max' maxV' n'
         loop n1@(Bin min1 minV1 l1 r1) n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max) (xor min2 max) of
             LT -> loop n1 r2
@@ -752,7 +724,7 @@ difference = start
         | k > max = n
         | otherwise = case r of
             Tip -> l
-            Bin minI minVI lI rI -> let DR max' maxV' r' = goDeleteMax minI minVI lI rI
+            Bin minI minVI lI rI -> let DR max' maxV' r' = deleteMaxR minI minVI lI rI
                                     in  Bin max' maxV' l r'
       where xorCacheMax = xor k max
     
@@ -764,23 +736,9 @@ difference = start
         | k < min = n
         | otherwise = case l of
             Tip -> r
-            Bin maxI maxVI lI rI -> let DR min' minV' l' = goDeleteMin maxI maxVI lI rI
+            Bin maxI maxVI lI rI -> let DR min' minV' l' = deleteMinL maxI maxVI lI rI
                                     in  Bin min' minV' l' r
       where xorCacheMin = xor min k
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
     
     dummyV = error "impossible"
 
@@ -1310,13 +1268,13 @@ splitLookup k = k `seq` start
             Bin max maxV l r | k < max -> let (DR glb glbV lt, eq, DR lub lubV gt) = go (xor min k) min minV (xor k max) max maxV l r
                                           in (flipBounds (NonEmpty glb glbV lt), eq, NonEmpty lub lubV gt)
                              | k > max -> (m, Nothing, Empty)
-                             | otherwise -> let DR max' maxV' root' = goDeleteMax min minV l r
+                             | otherwise -> let DR max' maxV' root' = deleteMaxR min minV l r
                                             in (flipBounds (NonEmpty max' maxV' root'), Just maxV, Empty)
                                 
         | k < min = (Empty, Nothing, m)
         | otherwise = case root of
             Tip -> (Empty, Just minV, Empty)
-            Bin max maxV l r -> let DR min' minV' root' = goDeleteMin max maxV l r
+            Bin max maxV l r -> let DR min' minV' root' = deleteMinL max maxV l r
                                 in (Empty, Just minV, NonEmpty min' minV' root')
     
     go xorCacheMin min minV xorCacheMax max maxV l r
@@ -1326,28 +1284,14 @@ splitLookup k = k `seq` start
                 | k < maxI -> let (lt, eq, DR minI minVI gt) = go xorCacheMin min minV (xor k maxI) maxI maxVI lI rI
                               in (lt, eq, DR minI minVI (Bin max maxV gt r))
                 | k > maxI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
-                | otherwise -> (goDeleteMax min minV lI rI, Just maxVI, flipBoundsDR (DR max maxV r))
+                | otherwise -> (deleteMaxR min minV lI rI, Just maxVI, flipBoundsDR (DR max maxV r))
         | otherwise = case r of
             Tip -> (flipBoundsDR (DR min minV l), Nothing, DR max maxV Tip)
             Bin minI minVI lI rI
                 | k > minI -> let (DR maxI maxVI lt, eq, gt) = go (xor minI k) minI minVI xorCacheMax max maxV lI rI
                               in (DR maxI maxVI (Bin min minV l lt), eq, gt)
                 | k < minI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
-                | otherwise -> (flipBoundsDR (DR min minV l), Just minVI, goDeleteMin max maxV lI rI)
-    
-    goDeleteMin max maxV l r = case l of
-        Tip -> case r of
-            Tip -> DR max maxV r
-            Bin min minV l' r' -> DR min minV (Bin max maxV l' r')
-        Bin maxI maxVI lI rI -> let DR min minV l' = goDeleteMin maxI maxVI lI rI
-                                in  DR min minV (Bin max maxV l' r)
-    
-    goDeleteMax min minV l r = case r of
-        Tip -> case l of
-            Tip -> DR min minV l
-            Bin max maxV l' r' -> DR max maxV (Bin min minV l' r')
-        Bin minI minVI lI rI -> let DR max maxV r' = goDeleteMax minI minVI lI rI
-                                in  DR max maxV (Bin min minV l r')
+                | otherwise -> (flipBoundsDR (DR min minV l), Just minVI, deleteMinL max maxV lI rI)
 
 -- | /O(1)/.  Decompose a map into pieces based on the structure of the underlying
 -- tree.  This function is useful for consuming a map in parallel.
@@ -1738,3 +1682,39 @@ flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
 flipBoundsDR :: DeleteResult a -> DeleteResult a
 flipBoundsDR n@(DR _ _ Tip) = n
 flipBoundsDR (DR b1 v1 (Bin b2 v2 l r)) = DR b2 v2 (Bin b1 v1 l r)
+
+-- | Insert a key/value pair to a left node where the key is smaller than
+-- any present in that node. Requires the xor of the inserted key and the
+-- key immediately prior to it (the minimum bound of the node).
+insertMinL :: Word -> Key -> a -> Node a -> Node a
+insertMinL !_ !min minV Tip = Bin min minV Tip Tip
+insertMinL !xorCache !min minV (Bin max maxV l r)
+    | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
+    | otherwise = Bin max maxV (insertMinL xorCache min minV l) r
+
+-- | Insert a key/value pair to a right node where the key is greater than
+-- any present in that node. Requires the xor of the inserted key and the
+-- key immediately following it (the maximum bound of the node).
+insertMaxR :: Word -> Key -> a -> Node a -> Node a
+insertMaxR !_ !max maxV Tip = Bin max maxV Tip Tip
+insertMaxR !xorCache !max maxV (Bin min minV l r)
+    | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
+    | otherwise = Bin min minV l (insertMaxR xorCache max maxV r)
+
+-- | Delete the minimum key/value pair from an unpacked left node, returning
+-- a new left node in a DeleteResult.
+deleteMinL :: Key -> a -> Node a -> Node a -> DeleteResult a
+deleteMinL !max maxV Tip Tip = DR max maxV Tip
+deleteMinL !max maxV Tip (Bin min minV l r) = DR min minV (Bin max maxV l r)
+deleteMinL !max maxV (Bin innerMax innerMaxV innerL innerR) r =
+    let DR min minV inner = deleteMinL innerMax innerMaxV innerL innerR
+    in  DR min minV (Bin max maxV inner r)
+
+-- | Delete the maximum key/value pair from an unpacked right node, returning
+-- a new right node in a DeleteResult.
+deleteMaxR :: Key -> a -> Node a -> Node a -> DeleteResult a
+deleteMaxR !min minV Tip Tip = DR min minV Tip
+deleteMaxR !min minV (Bin max maxV l r) Tip = DR max maxV (Bin min minV l r)
+deleteMaxR !min minV l (Bin innerMin innerMinV innerL innerR) =
+    let DR max maxV inner = deleteMaxR innerMin innerMinV innerL innerR
+    in  DR max maxV (Bin min minV l inner)
