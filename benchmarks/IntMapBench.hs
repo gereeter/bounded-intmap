@@ -43,6 +43,16 @@ main = do
                 , bench "WordMap" $ whnf (\m -> foldl' (\n x -> if W.member x m then n + 1 else n) 0 sKeysSearch) sparseW
                 ]
             ]
+        , bgroup "spec_member"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (M.member 1234) denseM
+                , bench "WordMap" $ whnf (W.member 1234) denseW
+                ]
+            , bgroup "absent"
+                [ bench "IntMap"  $ whnf (M.member 1234) sparseM
+                , bench "WordMap" $ whnf (W.member 1234) sparseW
+                ]
+            ]
         , bgroup "insert"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (\m -> foldl' (\m (k, v) -> M.insert k v m) m elems) denseM
@@ -107,6 +117,16 @@ main = do
             , bgroup "absent"
                 [ bench "IntMap" $ whnf (\m -> foldl' (\m k -> M.delete k m) m sKeysSearch) sparseM
                 , bench "WordMap" $ whnf (\m -> foldl' (\m k -> W.delete k m) m sKeysSearch) sparseW
+                ]
+            ]
+        , bgroup "spec_delete"
+            [ bgroup "present"
+                [ bench "IntMap"  $ whnf (M.delete 1234) denseM
+                , bench "WordMap" $ whnf (W.delete 1234) denseW
+                ]
+            , bgroup "absent"
+                [ bench "IntMap" $ whnf (M.delete 1234) sparseM
+                , bench "WordMap" $ whnf (W.delete 1234) sparseW
                 ]
             ]
         , bgroup "update"
