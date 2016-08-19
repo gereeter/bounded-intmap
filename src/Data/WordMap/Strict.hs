@@ -694,7 +694,7 @@ differenceWithKey combine = start
         GT -> binL (goL1 minV1 min1 l1 min2 n2) (NonEmpty max1 maxV1 r1)
     
     goL2 !_   Tip !_   !_  = Tip
-    goL2 min1 n1  min2 Tip = goDeleteL min2 (xor min1 min2) n1
+    goL2 min1 n1  min2 Tip = deleteL min2 (xor min1 min2) n1
     goL2 _ n1@(Bin max1 _ _ _) min2 (Bin _ _ _ _) | min2 > max1 = n1
     goL2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT -> goL2 min1 n1 min2 l2
@@ -767,7 +767,7 @@ differenceWithKey combine = start
         GT -> binR (NonEmpty min1 minV1 l1) (goR1 maxV1 max1 r1 max2 n2)
     
     goR2 !_   Tip !_   !_  = Tip
-    goR2 max1 n1  max2 Tip = goDeleteR max2 (xor max1 max2) n1
+    goR2 max1 n1  max2 Tip = deleteR max2 (xor max1 max2) n1
     goR2 _ n1@(Bin min1 _ _ _) max2 (Bin _ _ _ _) | min1 > max2 = n1
     goR2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT -> goR2 max1 n1 max2 r2
@@ -842,24 +842,6 @@ differenceWithKey combine = start
         | otherwise = case combine k v minV of
             Nothing -> Empty
             Just !v' -> NonEmpty k v' Tip
-      where xorCacheMin = xor min k
-    
-    goDeleteL _ !_           Tip = Tip
-    goDeleteL k !xorCache n@(Bin max maxV l r)
-        | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goDeleteL k xorCache l) r
-                    else Bin max maxV l (goDeleteR k xorCacheMax r)
-        | k > max = n
-        | otherwise = extractBinL l r
-      where xorCacheMax = xor k max
-    
-    goDeleteR _ !_           Tip = Tip
-    goDeleteR k !xorCache n@(Bin min minV l r)
-        | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goDeleteR k xorCache r)
-                    else Bin min minV (goDeleteL k xorCacheMin l) r
-        | k < min = n
-        | otherwise = extractBinR l r
       where xorCacheMin = xor min k
     
     dummyV = error "impossible"

@@ -386,25 +386,7 @@ delete k = k `seq` start
     start m@(NonEmpty min minV root@(Bin max maxV l r))
         | k < min = m
         | k == min = let DR min' minV' root' = deleteMinL max maxV l r in NonEmpty min' minV' root'
-        | otherwise = NonEmpty min minV (goL (xor min k) root)
-    
-    goL !_           Tip = Tip
-    goL !xorCache n@(Bin max maxV l r)
-        | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goL xorCache l) r
-                    else Bin max maxV l (goR xorCacheMax r)
-        | k > max = n
-        | otherwise = extractBinL l r
-      where xorCacheMax = xor k max
-    
-    goR !_           Tip = Tip
-    goR !xorCache n@(Bin min minV l r)
-        | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goR xorCache r)
-                    else Bin min minV (goL xorCacheMin l) r
-        | k < min = n
-        | otherwise = extractBinR l r
-      where xorCacheMin = xor min k
+        | otherwise = NonEmpty min minV (deleteL k (xor min k) root)
 
 -- TODO: Does a strict pair work? My guess is not, as GHC was already
 -- unboxing the tuple, but it would be simpler to use one of those.
@@ -614,7 +596,7 @@ difference = start
         GT -> binL (goL1 minV1 min1 l1 min2 n2) (NonEmpty max1 maxV1 r1)
     
     goL2 !_   Tip !_   !_  = Tip
-    goL2 min1 n1  min2 Tip = goDeleteL min2 (xor min1 min2) n1
+    goL2 min1 n1  min2 Tip = deleteL min2 (xor min1 min2) n1
     goL2 _ n1@(Bin max1 _ _ _) min2 (Bin _ _ _ _) | min2 > max1 = n1
     goL2 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT -> goL2 min1 n1 min2 l2
@@ -660,7 +642,7 @@ difference = start
         GT -> binR (NonEmpty min1 minV1 l1) (goR1 maxV1 max1 r1 max2 n2)
     
     goR2 !_   Tip !_   !_  = Tip
-    goR2 max1 n1  max2 Tip = goDeleteR max2 (xor max1 max2) n1
+    goR2 max1 n1  max2 Tip = deleteR max2 (xor max1 max2) n1
     goR2 _ n1@(Bin min1 _ _ _) max2 (Bin _ _ _ _) | min1 > max2 = n1
     goR2 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT -> goR2 max1 n1 max2 r2
@@ -708,24 +690,6 @@ difference = start
                     else goLookupL k v xorCacheMin l
         | k < min = NonEmpty k v Tip
         | otherwise = Empty
-      where xorCacheMin = xor min k
-    
-    goDeleteL _ !_           Tip = Tip
-    goDeleteL k !xorCache n@(Bin max maxV l r)
-        | k < max = if xorCache < xorCacheMax
-                    then Bin max maxV (goDeleteL k xorCache l) r
-                    else Bin max maxV l (goDeleteR k xorCacheMax r)
-        | k > max = n
-        | otherwise = extractBinL l r
-      where xorCacheMax = xor k max
-    
-    goDeleteR _ !_           Tip = Tip
-    goDeleteR k !xorCache n@(Bin min minV l r)
-        | k > min = if xorCache < xorCacheMin
-                    then Bin min minV l (goDeleteR k xorCache r)
-                    else Bin min minV (goDeleteL k xorCacheMin l) r
-        | k < min = n
-        | otherwise = extractBinR l r
       where xorCacheMin = xor min k
     
     dummyV = error "impossible"
@@ -1720,3 +1684,27 @@ extractBinR Tip r = r
 extractBinR (Bin max maxV innerL innerR) r =
     let DR min minV l = deleteMinL max maxV innerL innerR
     in Bin min minV l r
+
+-- | Delete a key from a left node. Takes the xor of the deleted key and
+-- the minimum bound of that node.
+deleteL :: Key -> Word -> Node a -> Node a
+deleteL !_ !_ Tip = Tip
+deleteL !k !xorCache n@(Bin max maxV l r)
+    | k < max = if xorCache < xorCacheMax
+                then Bin max maxV (deleteL k xorCache l) r
+                else Bin max maxV l (deleteR k xorCacheMax r)
+    | k > max = n
+    | otherwise = extractBinL l r
+  where xorCacheMax = xor k max
+
+-- | Delete a key from a right node. Takes the xor of the deleted key and
+-- the maximum bound of that node.
+deleteR :: Key -> Word -> Node a -> Node a
+deleteR !_ !_ Tip = Tip
+deleteR !k !xorCache n@(Bin min minV l r)
+    | k > min = if xorCache < xorCacheMin
+                then Bin min minV l (deleteR k xorCache r)
+                else Bin min minV (deleteL k xorCacheMin l) r
+    | k < min = n
+    | otherwise = extractBinR l r
+  where xorCacheMin = xor min k
