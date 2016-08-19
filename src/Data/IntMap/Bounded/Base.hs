@@ -21,7 +21,7 @@ import Data.Bits (xor)
 import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap.Base as W
 
-import qualified Data.IntSet (IntSet, fromDistinctAscList)
+import qualified Data.IntSet (IntSet, fromDistinctAscList, member, notMember)
 
 import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
@@ -600,6 +600,26 @@ filter p (IntMap m) = IntMap (W.filter p m)
 -- > filterWithKey (\k _ -> k > 4) (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 filterWithKey :: (Key -> a -> Bool) -> IntMap a -> IntMap a
 filterWithKey p (IntMap m) = IntMap (W.filterWithKey (p . w2i) m)
+
+-- | /O(n+m)/. The restriction of a map to the keys in a set.
+--
+-- @
+-- m `restrictKeys` s = 'filterWithKey' (\k _ -> k `'IntSet.member'` s) m
+-- @
+--
+-- @since 0.5.8
+restrictKeys :: IntMap a -> Data.IntSet.IntSet -> IntMap a
+restrictKeys m s = filterWithKey (\k _ -> Data.IntSet.member k s) m
+
+-- | Remove all the keys in a given set from a map.
+--
+-- @
+-- m `withoutKeys` s = 'filterWithKey' (\k _ -> k `'IntSet.notMember'` s) m
+-- @
+--
+-- @since 0.5.8
+withoutKeys :: IntMap a -> Data.IntSet.IntSet -> IntMap a
+withoutKeys m s = filterWithKey (\k _ -> Data.IntSet.notMember k s) m
 
 -- | /O(n)/. Partition the map according to some predicate. The first
 -- map contains all elements that satisfy the predicate, the second all

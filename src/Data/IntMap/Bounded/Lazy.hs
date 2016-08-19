@@ -111,6 +111,8 @@ module Data.IntMap.Bounded.Lazy (
     -- * Filter
     , filter
     , filterWithKey
+    , restrictKeys
+    , withoutKeys
     , partition
     , partitionWithKey
     , mapMaybe
