@@ -462,10 +462,13 @@ updateLookupWithKey f k = k `seq` start
 -- 'alter' can be used to insert, delete, or update a value in an 'IntMap'.
 -- In short : @'lookup' k ('alter' f k m) = f ('lookup' k m)@.
 alter :: (Maybe a -> Maybe a) -> Key -> WordMap a -> WordMap a
-alter f k m | member k m = update (f . Just) k m
-            | otherwise = case f Nothing of
-                Just x -> insert k x m
-                Nothing -> m
+alter f k m = case lookup k m of
+    Nothing -> case f Nothing of
+        Nothing -> m
+        Just v -> insert k v m
+    Just v -> case f (Just v) of
+        Nothing -> delete k m
+        Just v' -> insert k v' m
 
 -- | /O(n+m)/. The union with a combining function.
 --
