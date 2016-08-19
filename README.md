@@ -1,7 +1,7 @@
 bounded-intmap
 ==============
 
-`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 33% slower than stock `Data.IntMap`. However, only five types of function in the benchmark, `insert`, `intersection`, `difference`, `fromAscList`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and not all of these are slower in all cases. In comparison, `lookup`, `member`, `map`, `mapMaybe`, `delete`, `update`, and `union` are all faster than stock `Data.IntMap`. Additionally, this implementation, on GHC, has an overhead of 3 words per key/value pair, while stock `Data.IntMap` has an overhead of 6 words per key/value pair.
+`bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 33% slower than stock `Data.IntMap`. However, only four types of function in the benchmark, `intersection`, `difference`, `fromAscList`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and not all of these are slower in all cases. In comparison, `lookup`, `member`, `map`, `mapMaybe`, `insert`, `delete`, `update`, 'alter', and `union` are all faster than stock `Data.IntMap`. Additionally, this implementation, on GHC, has an overhead of 3 words per key/value pair, while stock `Data.IntMap` has an overhead of 6 words per key/value pair.
 
 I deviate from Edward Kmett's implementation in a couple of ways:
 
@@ -79,7 +79,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `update`. Raw.
 * `updateWithKey`. Delegated, using `update`.
 * `updateLookupWithKey`. Raw.
-* `alter`. Delegated, using `member` and either `update` or `insert`.
+* `alter`. Delegated, using `lookup` and either `delete` or `insert`.
+* `alterF`. Delegated, using `lookup` and either `delete` or `insert`.
 
 ### Combine
 #### Union
@@ -151,6 +152,8 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 ### Filter
 * `filter`. Delegated, using `filterWithKey`.
 * `filterWithKey`. Raw.
+* `restrictKeys`. Delegated, using `filterWithKey` and `Data.IntSet.member`. Note that this is only for `IntMap`, not for `WordMap`, as I'm not sure what set to intersect with.
+* `withoutKeys`. Delegated, using `filterWithKey` and `Data.IntSet.notMember`. Note that this is only for `IntMap`, not for `WordMap`, as I'm not sure what set to intersect with.
 * `partition`. Delegated, using `partitionWithKey`.
 * `partitionWithKey`. Raw.
 * `mapMaybe`. Delegated, using `mapMaybeWithKey`.
