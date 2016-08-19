@@ -42,6 +42,7 @@ module Data.WordMap.Lazy (
     , updateWithKey
     , updateLookupWithKey
     , alter
+    , alterF
 
     -- * Combine
     -- ** Union
@@ -469,6 +470,42 @@ alter f k m = case lookup k m of
     Just v -> case f (Just v) of
         Nothing -> delete k m
         Just v' -> insert k v' m
+
+-- | /O(log n)/. The expression (@'alterF' f k map@) alters the value @x@ at
+-- @k@, or absence thereof.  'alterF' can be used to inspect, insert, delete,
+-- or update a value in an 'IntMap'.  In short : @'lookup' k <$> 'alterF' f k m = f
+-- ('lookup' k m)@.
+--
+-- Example:
+--
+-- @
+-- interactiveAlter :: Word -> WordMap String -> IO (WordMap String)
+-- interactiveAlter k m = alterF f k m where
+--   f Nothing -> do
+--      putStrLn $ show k ++
+--          " was not found in the map. Would you like to add it?"
+--      getUserResponse1 :: IO (Maybe String)
+--   f (Just old) -> do
+--      putStrLn "The key is currently bound to " ++ show old ++
+--          ". Would you like to change or delete it?"
+--      getUserresponse2 :: IO (Maybe String)
+-- @
+--
+-- 'alterF' is the most general operation for working with an individual
+-- key that may or may not be in a given map.
+--
+-- Note: 'alterF' is a flipped version of the 'at' combinator from
+-- 'Control.Lens.At'.
+--
+-- @since 0.5.8
+alterF :: Functor f => (Maybe a -> f (Maybe a)) -> Key -> WordMap a -> f (WordMap a)
+alterF f k m = case lookup k m of
+    Nothing -> fmap (\ret -> case ret of
+        Nothing -> m
+        Just v -> insert k v m) (f Nothing)
+    Just v -> fmap (\ret -> case ret of
+        Nothing -> delete k m
+        Just v' -> insert k v' m) (f (Just v))
 
 -- | /O(n+m)/. The union with a combining function.
 --
