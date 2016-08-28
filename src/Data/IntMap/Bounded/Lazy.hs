@@ -218,7 +218,7 @@ insertWithKey combine k v (IntMap m) = IntMap (W.insertWithKey (combine . w2i) (
 insertLookupWithKey :: (Key -> a -> a -> a) -> Key -> a -> IntMap a -> (Maybe a, IntMap a)
 insertLookupWithKey combine k v (IntMap m) =
     let (mv, m') = W.insertLookupWithKey (combine . w2i) (i2w k) v m
-    in (mv, IntMap m')
+    in mv `seq` m' `seq` (mv, IntMap m')
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
 -- a member of the map, the original map is returned.

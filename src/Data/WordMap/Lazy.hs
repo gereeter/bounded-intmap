@@ -152,6 +152,8 @@ import Control.Applicative (Applicative(..))
 import Data.Functor ((<$>))
 import Data.Bits (xor)
 
+import Data.StrictPair (StrictPair(..), toPair)
+
 import qualified Data.List (foldl')
 
 import Prelude hiding (foldr, foldl, lookup, null, map, filter, min, max)
@@ -270,39 +272,39 @@ insertWithKey f k = insertWith (f k) k
 -- > insertLookup 5 "x" (fromList [(5,"a"), (3,"b")]) == (Just "a", fromList [(3, "b"), (5, "x")])
 -- > insertLookup 7 "x" (fromList [(5,"a"), (3,"b")]) == (Nothing,  fromList [(3, "b"), (5, "a"), (7, "x")])
 insertLookupWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> (Maybe a, WordMap a)
-insertLookupWithKey combine k v = k `seq` start
+insertLookupWithKey combine !k !v = toPair . start
   where
-    start Empty = (Nothing, NonEmpty k v Tip)
+    start Empty = Nothing :*: NonEmpty k v Tip
     start (NonEmpty min minV root)
-        | k > min = let (mv, root') = goL (xor min k) min root
-                    in  (mv, NonEmpty min minV root')
-        | k < min = (Nothing, NonEmpty k v (insertMinL (xor min k) min minV root))
-        | otherwise = (Just minV, NonEmpty k (combine k v minV) root)
+        | k > min = let mv :*: root' = goL (xor min k) min root
+                    in  mv :*: NonEmpty min minV root'
+        | k < min = Nothing :*: NonEmpty k v (insertMinL (xor min k) min minV root)
+        | otherwise = Just minV :*: NonEmpty k (combine k v minV) root
     
-    goL !_        _    Tip = (Nothing, Bin k v Tip Tip)
+    goL !_        _    Tip = Nothing :*: Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
         | k < max = if xorCache < xorCacheMax
-                    then let (mv, l') = goL xorCache min l
-                         in  (mv, Bin max maxV l' r)
-                    else let (mv, r') = goR xorCacheMax max r
-                         in  (mv, Bin max maxV l r')
+                    then let mv :*: l' = goL xorCache min l
+                         in  mv :*: Bin max maxV l' r
+                    else let mv :*: r' = goR xorCacheMax max r
+                         in  mv :*: Bin max maxV l r'
         | k > max = if xor min max < xorCacheMax
-                    then (Nothing, Bin k v (Bin max maxV l r) Tip)
-                    else (Nothing, Bin k v l (insertMaxR xorCacheMax max maxV r))
-        | otherwise = (Just maxV, Bin max (combine k v maxV) l r)
+                    then Nothing :*: Bin k v (Bin max maxV l r) Tip
+                    else Nothing :*: Bin k v l (insertMaxR xorCacheMax max maxV r)
+        | otherwise = Just maxV :*: Bin max (combine k v maxV) l r
       where xorCacheMax = xor k max
 
-    goR !_        _    Tip = (Nothing, Bin k v Tip Tip)
+    goR !_        _    Tip = Nothing :*: Bin k v Tip Tip
     goR !xorCache max (Bin min minV l r)
         | k > min = if xorCache < xorCacheMin
-                    then let (mv, r') = goR xorCache max r
-                         in  (mv, Bin min minV l r')
-                    else let (mv, l') = goL xorCacheMin min l
-                         in  (mv, Bin min minV l' r)
+                    then let mv :*: r' = goR xorCache max r
+                         in  mv :*: Bin min minV l r'
+                    else let mv :*: l' = goL xorCacheMin min l
+                         in  mv :*: Bin min minV l' r
         | k < min = if xor min max < xorCacheMin
-                    then (Nothing, Bin k v Tip (Bin min minV l r))
-                    else (Nothing, Bin k v (insertMinL xorCacheMin min minV l) r)
-        | otherwise = (Just minV, Bin min (combine k v minV) l r)
+                    then Nothing :*: Bin k v Tip (Bin min minV l r)
+                    else Nothing :*: Bin k v (insertMinL xorCacheMin min minV l) r
+        | otherwise = Just minV :*: Bin min (combine k v minV) l r
       where xorCacheMin = xor min k
 
 -- | /O(min(n,W))/. Adjust a value at a specific key. When the key is not
