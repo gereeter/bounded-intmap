@@ -128,12 +128,12 @@ lookupLT k = k `seq` start
                         Bin minI minVI lI rI
                             | minI >= i2w k -> Nothing
                             | otherwise -> Just (goL (xor minI (i2w k)) minI minVI (Bin max maxV lI rI))
-        | min < i2w k = Just (goL (xor min (i2w k)) min minV node)
+        | w2i min < k = Just (goL (xor min (i2w k)) min minV node)
         | otherwise = Nothing
     
     goL !_ min minV Tip = (w2i min, minV)
     goL !xorCache min minV (Bin max maxV l r)
-        | max < i2w k = (w2i max, maxV)
+        | w2i max < k = (w2i max, maxV)
         | xorCache < xorCacheMax = goL xorCache min minV l
         | otherwise = goR xorCacheMax r min minV l
       where
@@ -141,7 +141,7 @@ lookupLT k = k `seq` start
     
     goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
     goR !xorCache (Bin min minV l r) fMin fMinV fallback
-        | min >= i2w k = getMax fMin fMinV fallback
+        | w2i min >= k = getMax fMin fMinV fallback
         | xorCache < xorCacheMin = goR xorCache r min minV l
         | otherwise = goL xorCacheMin min minV l
       where
@@ -174,12 +174,12 @@ lookupLE k = k `seq` start
                         Bin minI minVI lI rI
                             | minI > i2w k -> Nothing
                             | otherwise -> Just (goL (xor minI (i2w k)) minI minVI (Bin max maxV lI rI))
-        | min <= i2w k = Just (goL (xor min (i2w k)) min minV node)
+        | w2i min <= k = Just (goL (xor min (i2w k)) min minV node)
         | otherwise = Nothing
     
     goL !_ min minV Tip = (w2i min, minV)
     goL !xorCache min minV (Bin max maxV l r)
-        | max <= i2w k = (w2i max, maxV)
+        | w2i max <= k = (w2i max, maxV)
         | xorCache < xorCacheMax = goL xorCache min minV l
         | otherwise = goR xorCacheMax r min minV l
       where
@@ -187,7 +187,7 @@ lookupLE k = k `seq` start
     
     goR !_ Tip fMin fMinV fallback = getMax fMin fMinV fallback
     goR !xorCache (Bin min minV l r) fMin fMinV fallback
-        | min > i2w k = getMax fMin fMinV fallback
+        | w2i min > k = getMax fMin fMinV fallback
         | xorCache < xorCacheMin = goR xorCache r min minV l
         | otherwise = goL xorCacheMin min minV l
       where
@@ -219,12 +219,12 @@ lookupGT k = k `seq` start
                         Bin maxI maxVI lI rI
                             | maxI <= i2w k -> Nothing
                             | otherwise -> Just (goR (xor (i2w k) maxI) maxI maxVI (Bin min minV lI rI))
-        | max > i2w k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
+        | w2i max > k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
         | otherwise = Nothing
     
     goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
     goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
-        | max <= i2w k = getMin fMax fMaxV fallback
+        | w2i max <= k = getMin fMax fMaxV fallback
         | xorCache < xorCacheMax = goL xorCache l max maxV r
         | otherwise = goR xorCacheMax max maxV r
       where
@@ -232,7 +232,7 @@ lookupGT k = k `seq` start
     
     goR !_ max maxV Tip = (w2i max, maxV)
     goR !xorCache max maxV (Bin min minV l r)
-        | min > i2w k = (w2i min, minV)
+        | w2i min > k = (w2i min, minV)
         | xorCache < xorCacheMin = goR xorCache max maxV r
         | otherwise = goL xorCacheMin l max maxV r
       where
@@ -265,12 +265,12 @@ lookupGE k = k `seq` start
                         Bin maxI maxVI lI rI
                             | maxI < i2w k -> Nothing
                             | otherwise -> Just (goR (xor (i2w k) maxI) maxI maxVI (Bin min minV lI rI))
-        | max >= i2w k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
+        | w2i max >= k = Just (goR (xor (i2w k) max) max maxV (Bin min minV l r))
         | otherwise = Nothing
     
     goL !_ Tip fMax fMaxV fallback = getMin fMax fMaxV fallback
     goL !xorCache (Bin max maxV l r) fMax fMaxV fallback
-        | max < i2w k = getMin fMax fMaxV fallback
+        | w2i max < k = getMin fMax fMaxV fallback
         | xorCache < xorCacheMax = goL xorCache l max maxV r
         | otherwise = goR xorCacheMax max maxV r
       where
@@ -278,7 +278,7 @@ lookupGE k = k `seq` start
     
     goR !_ max maxV Tip = (w2i max, maxV)
     goR !xorCache max maxV (Bin min minV l r)
-        | min >= i2w k = (w2i min, minV)
+        | w2i min >= k = (w2i min, minV)
         | xorCache < xorCacheMin = goR xorCache max maxV r
         | otherwise = goL xorCacheMin l max maxV r
       where
