@@ -27,7 +27,7 @@ import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
 type Key = Int
 
-newtype IntMap a = IntMap (W.WordMap a)
+newtype IntMap a = IntMap (W.WordMap a) deriving (Eq)
 
 instance Show a => Show (IntMap a) where
     show m = "fromList " ++ show (toList m)
