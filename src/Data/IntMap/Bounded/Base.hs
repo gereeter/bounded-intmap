@@ -20,6 +20,7 @@ import Data.Bits (xor)
 
 import Data.WordMap.Base (WordMap(..), Node(..))
 import qualified Data.WordMap.Base as W
+import qualified Data.WordMap.Lazy as W (unionM, differenceM, intersectionM)
 
 import qualified Data.IntSet (IntSet, fromDistinctAscList, member, notMember)
 
@@ -304,6 +305,9 @@ delete k (IntMap m) = IntMap (W.delete (i2w k) m)
 union :: IntMap a -> IntMap a -> IntMap a
 union (IntMap m1) (IntMap m2) = IntMap (W.union m1 m2)
 
+unionM :: IntMap a -> IntMap a -> IntMap a
+unionM (IntMap m1) (IntMap m2) = IntMap (W.unionM m1 m2)
+
 -- | The union of a list of maps.
 --
 -- > unions [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])]
@@ -319,11 +323,17 @@ unions = Data.Foldable.foldl' union empty
 difference :: IntMap a -> IntMap b -> IntMap a
 difference (IntMap m1) (IntMap m2) = IntMap (W.difference m1 m2)
 
+differenceM :: IntMap a -> IntMap b -> IntMap a
+differenceM (IntMap m1) (IntMap m2) = IntMap (W.differenceM m1 m2)
+
 -- | /O(n+m)/. The (left-biased) intersection of two maps (based on keys).
 --
 -- > intersection (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "a"
 intersection :: IntMap a -> IntMap b -> IntMap a
 intersection (IntMap m1) (IntMap m2) = IntMap (W.intersection m1 m2)
+
+intersectionM :: IntMap a -> IntMap b -> IntMap a
+intersectionM (IntMap m1) (IntMap m2) = IntMap (W.intersectionM m1 m2)
 
 -- | /O(n)/. Fold the values in the map using the given right-associative
 -- binary operator, such that @'foldr' f z == 'Prelude.foldr' f z . 'elems'@.

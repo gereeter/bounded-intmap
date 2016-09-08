@@ -417,7 +417,7 @@ union = start
     goL1 minV1 min1 n1  min2 Tip = insertMinL (xor min1 min2) min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
          LT | xor min2 max2 `ltMSB` xor min1 min2 -> disjoint -- we choose min1 and min2 arbitrarily - we just need something from tree 1 and something from tree 2
-            | xor min2 min1 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
+            | xor min1 min2 < xor min1 max2 -> Bin max2 maxV2 (goL1 minV1 min1 n1 min2 l2) r2 -- we choose min1 arbitrarily - we just need something from tree 1
             | max1 > max2 -> Bin max1 maxV1 l2 (goR2 maxV2 max1 (Bin min1 minV1 l1 r1) max2 r2)
             | max1 < max2 -> Bin max2 maxV2 l2 (goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2)
             | otherwise -> Bin max1 maxV1 l2 (goRFused max1 (Bin min1 minV1 l1 r1) r2) -- we choose max1 arbitrarily, as max1 == max2
@@ -1684,6 +1684,18 @@ extractBinR Tip r = r
 extractBinR (Bin max maxV innerL innerR) r =
     let DR min minV l = deleteMinL max maxV innerL innerR
     in Bin min minV l r
+
+nodeToMapL :: Node a -> WordMap a
+nodeToMapL Tip = Empty
+nodeToMapL (Bin max maxV innerL innerR) =
+    let DR min minV l = deleteMinL max maxV innerL innerR
+    in NonEmpty min minV l
+
+nodeToMapR :: Node a -> WordMap a
+nodeToMapR Tip = Empty
+nodeToMapR (Bin min minV innerL innerR) =
+    let DR max maxV r = deleteMaxR min minV innerL innerR
+    in NonEmpty max maxV r
 
 -- | Delete a key from a left node. Takes the xor of the deleted key and
 -- the minimum bound of that node.

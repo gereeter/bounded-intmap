@@ -165,50 +165,60 @@ main = do
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (uncurry M.union) (denseM, sparseM)
                 , bench "WordMap" $ whnf (uncurry W.union) (denseW, sparseW)
+                , bench "NewWordMap" $ whnf (uncurry W.unionM) (denseW, sparseW)
                 ]
             , bgroup "absent"
                 [ bench "IntMap"  $ whnf (uncurry M.union) (sparseM, sparseM')
                 , bench "WordMap" $ whnf (uncurry W.union) (sparseW, sparseW')
+                , bench "NewWordMap" $ whnf (uncurry W.unionM) (sparseW, sparseW')
                 ]
             ]
         , bgroup "unionWithKey"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (denseM, sparseM)
                 , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
+                , bench "NewWordMap" $ whnf (uncurry (W.unionWithM (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
                 ]
             , bgroup "absent"
                 [ bench "IntMap"  $ whnf (uncurry (M.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseM, sparseM')
                 , bench "WordMap" $ whnf (uncurry (W.unionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
+                , bench "NewWordMap" $ whnf (uncurry (W.unionWithM (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
         , bgroup "difference"
             [ bgroup "present"
-                [ bench "IntMap"  $ whnf (uncurry M.difference) (denseM, sparseM)
-                , bench "WordMap" $ whnf (uncurry W.difference) (denseW, sparseW)
+                [ bench "IntMap"     $ whnf (uncurry M.difference)  (denseM, sparseM)
+                , bench "WordMap"    $ whnf (uncurry W.difference)  (denseW, sparseW)
+                , bench "NewWordMap" $ whnf (uncurry W.differenceM) (denseW, sparseW)
                 ]
             , bgroup "absent"
-                [ bench "IntMap"  $ whnf (uncurry M.difference) (sparseM, sparseM')
-                , bench "WordMap" $ whnf (uncurry W.difference) (sparseW, sparseW')
+                [ bench "IntMap"     $ whnf (uncurry M.difference)  (sparseM, sparseM')
+                , bench "WordMap"    $ whnf (uncurry W.difference)  (sparseW, sparseW')
+                , bench "NewWordMap" $ whnf (uncurry W.differenceM) (sparseW, sparseW')
                 ]
             ]
         , bgroup "intersection"
             [ bgroup "present"
-                [ bench "IntMap"  $ whnf (uncurry M.intersection) (denseM, sparseM)
-                , bench "WordMap" $ whnf (uncurry W.intersection) (denseW, sparseW)
+                [ bench "IntMap"     $ whnf (uncurry M.intersection)  (denseM, sparseM)
+                , bench "WordMap"    $ whnf (uncurry W.intersection)  (denseW, sparseW)
+                , bench "NewWordMap" $ whnf (uncurry W.intersectionM) (denseW, sparseW)
                 ]
             , bgroup "absent"
-                [ bench "IntMap"  $ whnf (uncurry M.intersection) (sparseM, sparseM')
-                , bench "WordMap" $ whnf (uncurry W.intersection) (sparseW, sparseW')
+                [ bench "IntMap"     $ whnf (uncurry M.intersection)  (sparseM, sparseM')
+                , bench "WordMap"    $ whnf (uncurry W.intersection)  (sparseW, sparseW')
+                , bench "NewWordMap" $ whnf (uncurry W.intersectionM) (sparseW, sparseW')
                 ]
             ]
         , bgroup "intersectionWithKey"
             [ bgroup "present"
                 [ bench "IntMap"  $ whnf (uncurry (M.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (denseM, sparseM)
                 , bench "WordMap" $ whnf (uncurry (W.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
+                , bench "NewWordMap" $ whnf (uncurry (W.intersectionWithM (\k v1 v2 -> k + v1 + v2))) (denseW, sparseW)
                 ]
             , bgroup "absent"
                 [ bench "IntMap"  $ whnf (uncurry (M.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseM, sparseM')
                 , bench "WordMap" $ whnf (uncurry (W.intersectionWithKey (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
+                , bench "NewWordMap" $ whnf (uncurry (W.intersectionWithM (\k v1 v2 -> k + v1 + v2))) (sparseW, sparseW')
                 ]
             ]
         , bgroup "fromList"
@@ -218,6 +228,10 @@ main = do
         , bgroup "fromAscList"
             [ bench "IntMap"  $ whnf M.fromAscList elems
             , bench "WordMap" $ whnf W.fromAscList elems
+            ]
+        , bgroup "fromDistinctAscList"
+            [ bench "IntMap"  $ whnf M.fromDistinctAscList elems
+            , bench "WordMap" $ whnf W.fromDistinctAscList elems
             ]
         ]
   where

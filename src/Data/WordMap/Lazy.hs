@@ -47,19 +47,24 @@ module Data.WordMap.Lazy (
     -- * Combine
     -- ** Union
     , union
+    , unionM
     , unionWith
+    , unionWithM
     , unionWithKey
     , unions
     , unionsWith
 
     -- ** Difference
     , difference
+    , differenceM
     , differenceWith
     , differenceWithKey
 
     -- ** Intersection
     , intersection
+    , intersectionM
     , intersectionWith
+    , intersectionWithM
     , intersectionWithKey
 
     -- * Traversal
@@ -147,6 +152,8 @@ module Data.WordMap.Lazy (
 ) where
 
 import Data.WordMap.Base
+import Data.WordMap.Merge.Base (unionM, differenceM, intersectionM)
+import Data.WordMap.Merge.Lazy (unionWithM, intersectionWithM)
 
 import Control.Applicative (Applicative(..))
 import Data.Functor ((<$>))

@@ -47,19 +47,24 @@ module Data.IntMap.Bounded.Lazy (
     -- * Combine
     -- ** Union
     , union
+    , unionM
     , unionWith
+    , unionWithM
     , unionWithKey
     , unions
     , unionsWith
     
     -- ** Difference
     , difference
+    , differenceM
     , differenceWith
     , differenceWithKey
     
     -- ** Intersection
     , intersection
+    , intersectionM
     , intersectionWith
+    , intersectionWithM
     , intersectionWithKey
     
     -- * Traversal
@@ -324,6 +329,9 @@ unionWith f (IntMap m1) (IntMap m2) = IntMap (W.unionWith f m1 m2)
 unionWithKey :: (Key -> a -> a -> a) -> IntMap a -> IntMap a -> IntMap a
 unionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.unionWithKey (f . w2i) m1 m2)
 
+unionWithM :: (Key -> a -> a -> a) -> IntMap a -> IntMap a -> IntMap a
+unionWithM f (IntMap m1) (IntMap m2) = IntMap (W.unionWithM (f . w2i) m1 m2)
+
 -- | The union of a list of maps, with a combining operation.
 --
 -- > unionsWith (++) [(fromList [(5, "a"), (3, "b")]), (fromList [(5, "A"), (7, "C")]), (fromList [(5, "A3"), (3, "B3")])]
@@ -362,6 +370,9 @@ intersectionWith f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWith f m1 m2)
 -- > intersectionWithKey f (fromList [(5, "a"), (3, "b")]) (fromList [(5, "A"), (7, "C")]) == singleton 5 "5:a|A"
 intersectionWithKey :: (Key -> a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
 intersectionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithKey (f . w2i) m1 m2)
+
+intersectionWithM :: (Key -> a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
+intersectionWithM f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithM (f . w2i) m1 m2)
 
 -- | /O(n)/. Map a function over all values in the map.
 --
