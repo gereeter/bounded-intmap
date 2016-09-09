@@ -595,9 +595,9 @@ difference = start
     goL1 minV1 min1 n1@(Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = NonEmpty min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 min1 < xor min1 max2 -> goL1 minV1 min1 n1 min2 l2 -- min1 is arbitrary here - we just need something from tree 1
-           | max1 > max2 -> flipBounds $ NonEmpty max1 maxV1 (goR2 max1 (Bin min1 minV1 l1 r1) max2 r2)
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
-           | otherwise -> flipBounds $ goRFused max1 (Bin min1 minV1 l1 r1) r2
+           | max1 > max2 -> r2lMap $ NonEmpty max1 maxV1 (goR2 max1 (Bin min1 minV1 l1 r1) max2 r2)
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | otherwise -> r2lMap $ goRFused max1 (Bin min1 minV1 l1 r1) r2
         EQ | max1 > max2 -> binL (goL1 minV1 min1 l1 min2 l2) (NonEmpty max1 maxV1 (goR2 max1 r1 max2 r2))
            | max1 < max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> binL (goL1 minV1 min1 l1 min2 l2) (goRFused max1 r1 r2)
@@ -641,9 +641,9 @@ difference = start
     goR1 maxV1 max1 n1@(Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = NonEmpty max1 maxV1 n1
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 max1 > xor max1 max2 -> goR1 maxV1 max1 n1 max2 r2 -- max1 is arbitrary here - we just need something from tree 1
-           | min1 < min2 -> flipBounds $ NonEmpty min1 minV1 (goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2)
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
-           | otherwise -> flipBounds $ goLFused min1 (Bin max1 maxV1 l1 r1) l2
+           | min1 < min2 -> l2rMap $ NonEmpty min1 minV1 (goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2)
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | otherwise -> l2rMap $ goLFused min1 (Bin max1 maxV1 l1 r1) l2
         EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (goR1 maxV1 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> binR (goLFused min1 l1 l2) (goR1 maxV1 max1 r1 max2 r2)
@@ -715,20 +715,20 @@ intersection = start
         | min1 > min2 = WordMap (goL1 minV1 min1 root1 min2 root2)
         | otherwise = WordMap (NonEmpty min1 minV1 (goLFused min1 root1 root2)) -- we choose min1 arbitrarily, as min1 == min2
     
-    -- TODO: This scheme might produce lots of unnecessary flipBounds calls. This should be rectified.
+    -- TODO: This scheme might produce lots of unnecessary l2r and r2l calls. This should be rectified.
     
     goL1 _     !_   !_  !_   Tip = Empty
     goL1 minV1 min1 Tip min2 n2  = goLookupL1 min1 minV1 (xor min1 min2) n2
     goL1 _ min1 (Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = Empty
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 min1 < xor min1 max2 -> goL1 minV1 min1 n1 min2 l2 -- min1 is arbitrary here - we just need something from tree 1
-           | max1 > max2 -> flipBounds $ goR2 max1 (Bin min1 minV1 l1 r1) max2 r2
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
-           | otherwise -> flipBounds $ NonEmpty max1 maxV1 (goRFused max1 (Bin min1 minV1 l1 r1) r2)
+           | max1 > max2 -> r2lMap $ goR2 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | otherwise -> r2lMap $ NonEmpty max1 maxV1 (goRFused max1 (Bin min1 minV1 l1 r1) r2)
         EQ | max1 > max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
            | max1 < max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goL1 minV1 min1 l1 min2 l2 of
-                Empty -> flipBounds (NonEmpty max1 maxV1 (goRFused max1 r1 r2))
+                Empty -> r2lMap (NonEmpty max1 maxV1 (goRFused max1 r1 r2))
                 NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max1 maxV1 l' (goRFused max1 r1 r2))
         GT -> goL1 minV1 min1 l1 min2 n2
     
@@ -740,12 +740,12 @@ intersection = start
         EQ | max1 > max2 -> binL (goL2 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
            | max1 < max2 -> binL (goL2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goL2 min1 l1 min2 l2 of
-                Empty -> flipBounds (NonEmpty max1 maxV1 (goRFused max1 r1 r2))
+                Empty -> r2lMap (NonEmpty max1 maxV1 (goRFused max1 r1 r2))
                 NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max1 maxV1 l' (goRFused max1 r1 r2))
         GT | xor min1 min2 < xor min2 max1 -> goL2 min1 l1 min2 n2 -- min2 is arbitrary here - we just need something from tree 2
-           | max1 > max2 -> flipBounds $ goR2 max1 r1 max2 (Bin min2 dummyV l2 r2)
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 r1 max2 (Bin min2 dummyV l2 r2)
-           | otherwise -> flipBounds $ NonEmpty max1 maxV1 (goRFused max1 r1 (Bin min2 dummyV l2 r2))
+           | max1 > max2 -> r2lMap $ goR2 max1 r1 max2 (Bin min2 dummyV l2 r2)
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 r1 max2 (Bin min2 dummyV l2 r2)
+           | otherwise -> r2lMap $ NonEmpty max1 maxV1 (goRFused max1 r1 (Bin min2 dummyV l2 r2))
     
     goLFused min = loop
       where
@@ -767,13 +767,13 @@ intersection = start
     goR1 _ max1 (Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = Empty
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 _ l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 max1 > xor max1 max2 -> goR1 maxV1 max1 n1 max2 r2 -- max1 is arbitrary here - we just need something from tree 1
-           | min1 < min2 -> flipBounds $ goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
-           | otherwise -> flipBounds $ NonEmpty min1 minV1 (goLFused min1 (Bin max1 maxV1 l1 r1) l2)
+           | min1 < min2 -> l2rMap $ goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | otherwise -> l2rMap $ NonEmpty min1 minV1 (goLFused min1 (Bin max1 maxV1 l1 r1) l2)
         EQ | min1 < min2 -> binR (goL2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goR1 maxV1 max1 r1 max2 r2 of
-                Empty -> flipBounds (NonEmpty min1 minV1 (goLFused min1 l1 l2))
+                Empty -> l2rMap (NonEmpty min1 minV1 (goLFused min1 l1 l2))
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 minV1 (goLFused min1 l1 l2) r')
         GT -> goR1 maxV1 max1 r1 max2 n2
     
@@ -785,12 +785,12 @@ intersection = start
         EQ | min1 < min2 -> binR (goL2 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR2 max1 r1 max2 r2)
            | otherwise -> case goR2 max1 r1 max2 r2 of
-                Empty -> flipBounds (NonEmpty min1 minV1 (goLFused min1 l1 l2))
+                Empty -> l2rMap (NonEmpty min1 minV1 (goLFused min1 l1 l2))
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 minV1 (goLFused min1 l1 l2) r')
         GT | xor min1 max2 > xor max2 max1 -> goR2 max1 r1 max2 n2 -- max2 is arbitrary here - we just need something from tree 2
-           | min1 < min2 -> flipBounds $ goL2 min1 l1 min2 (Bin max2 dummyV l2 r2)
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 l1 min2 (Bin max2 dummyV l2 r2)
-           | otherwise -> flipBounds $ NonEmpty min1 minV1 (goLFused min1 l1 (Bin max2 dummyV l2 r2))
+           | min1 < min2 -> l2rMap $ goL2 min1 l1 min2 (Bin max2 dummyV l2 r2)
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 l1 min2 (Bin max2 dummyV l2 r2)
+           | otherwise -> l2rMap $ NonEmpty min1 minV1 (goLFused min1 l1 (Bin max2 dummyV l2 r2))
     
     goRFused max = loop
       where
@@ -1146,7 +1146,7 @@ partitionWithKey p = start
                             Empty -> tl
                             NonEmpty max' maxV' r' -> Bin max' maxV' tl r'
                           f = case fl of
-                            Empty -> flipBounds $ NonEmpty max maxV fr
+                            Empty -> r2lMap $ NonEmpty max maxV fr
                             NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max maxV l' fr)
                       in SP t f
     
@@ -1161,7 +1161,7 @@ partitionWithKey p = start
                             Empty -> tr
                             NonEmpty min' minV' l' -> Bin min' minV' l' tr
                           f = case fr of
-                            Empty -> flipBounds $ NonEmpty min minV fl
+                            Empty -> l2rMap $ NonEmpty min minV fl
                             NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min minV fl r')
                       in SP t f
     
@@ -1170,7 +1170,7 @@ partitionWithKey p = start
         | p max maxV = let SP tl fl = goFalseL l
                            SP tr fr = goTrueR r
                            t = case tl of
-                             Empty -> flipBounds $ NonEmpty max maxV tr
+                             Empty -> r2lMap $ NonEmpty max maxV tr
                              NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max maxV l' tr)
                            f = case fr of
                              Empty -> fl
@@ -1185,7 +1185,7 @@ partitionWithKey p = start
         | p min minV = let SP tl fl = goTrueL l
                            SP tr fr = goFalseR r
                            t = case tr of
-                             Empty -> flipBounds $ NonEmpty min minV tl
+                             Empty -> l2rMap $ NonEmpty min minV tl
                              NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min minV tl r')
                            f = case fl of
                              Empty -> fr
@@ -1226,10 +1226,10 @@ splitLookup k = k `seq` start
         | k > min = case root of
             Tip -> (m, Nothing, WordMap Empty)
             Bin max maxV l r | k < max -> let (DR glb glbV lt, eq, DR lub lubV gt) = go (xor min k) min minV (xor k max) max maxV l r
-                                          in (WordMap (flipBounds (NonEmpty glb glbV lt)), eq, WordMap (NonEmpty lub lubV gt))
+                                          in (WordMap (r2lMap (NonEmpty glb glbV lt)), eq, WordMap (NonEmpty lub lubV gt))
                              | k > max -> (m, Nothing, WordMap Empty)
                              | otherwise -> let DR max' maxV' root' = deleteMaxR min minV l r
-                                            in (WordMap (flipBounds (NonEmpty max' maxV' root')), Just maxV, WordMap Empty)
+                                            in (WordMap (r2lMap (NonEmpty max' maxV' root')), Just maxV, WordMap Empty)
 
         | k < min = (WordMap Empty, Nothing, m)
         | otherwise = case root of
@@ -1239,19 +1239,19 @@ splitLookup k = k `seq` start
     
     go xorCacheMin min minV xorCacheMax max maxV l r
         | xorCacheMin < xorCacheMax = case l of
-            Tip -> (DR min minV Tip, Nothing, flipBoundsDR (DR max maxV r))
+            Tip -> (DR min minV Tip, Nothing, r2lDR (DR max maxV r))
             Bin maxI maxVI lI rI
                 | k < maxI -> let (lt, eq, DR minI minVI gt) = go xorCacheMin min minV (xor k maxI) maxI maxVI lI rI
                               in (lt, eq, DR minI minVI (Bin max maxV gt r))
-                | k > maxI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
-                | otherwise -> (deleteMaxR min minV lI rI, Just maxVI, flipBoundsDR (DR max maxV r))
+                | k > maxI -> (l2rDR (DR min minV l), Nothing, r2lDR (DR max maxV r))
+                | otherwise -> (deleteMaxR min minV lI rI, Just maxVI, r2lDR (DR max maxV r))
         | otherwise = case r of
-            Tip -> (flipBoundsDR (DR min minV l), Nothing, DR max maxV Tip)
+            Tip -> (l2rDR (DR min minV l), Nothing, DR max maxV Tip)
             Bin minI minVI lI rI
                 | k > minI -> let (DR maxI maxVI lt, eq, gt) = go (xor minI k) minI minVI xorCacheMax max maxV lI rI
                               in (DR maxI maxVI (Bin min minV l lt), eq, gt)
-                | k < minI -> (flipBoundsDR (DR min minV l), Nothing, flipBoundsDR (DR max maxV r))
-                | otherwise -> (flipBoundsDR (DR min minV l), Just minVI, deleteMinL max maxV lI rI)
+                | k < minI -> (l2rDR (DR min minV l), Nothing, r2lDR (DR max maxV r))
+                | otherwise -> (l2rDR (DR min minV l), Just minVI, deleteMinL max maxV lI rI)
 
 -- | /O(1)/.  Decompose a map into pieces based on the structure of the underlying
 -- tree.  This function is useful for consuming a map in parallel.
@@ -1275,7 +1275,7 @@ splitLookup k = k `seq` start
 splitRoot :: WordMap a -> [WordMap a]
 splitRoot (WordMap Empty) = []
 splitRoot m@(WordMap (NonEmpty _ _ Tip)) = [m]
-splitRoot (WordMap (NonEmpty min minV (Bin max maxV l r))) = [WordMap (NonEmpty min minV l), WordMap (flipBounds (NonEmpty max maxV r))]
+splitRoot (WordMap (NonEmpty min minV (Bin max maxV l r))) = [WordMap (NonEmpty min minV l), WordMap (r2lMap (NonEmpty max maxV r))]
 
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
@@ -1624,28 +1624,37 @@ compareMSB x y = case compare x y of
 
 {-# INLINE binL #-}
 binL :: WordMap_ L a -> WordMap_ R a -> WordMap_ L a
-binL Empty r = flipBounds r
+binL Empty r = r2lMap r
 binL l Empty = l
 binL (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty min minV (Bin max maxV l r)
 
 {-# INLINE binR #-}
 binR :: WordMap_ L a -> WordMap_ R a -> WordMap_ R a
 binR Empty r = r
-binR l Empty = flipBounds l
+binR l Empty = l2rMap l
 binR (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty max maxV (Bin min minV l r)
 
--- FIXME: better type
-{-# INLINE flipBounds #-}
-flipBounds :: WordMap_ t a -> WordMap_ t' a
-flipBounds Empty = Empty
-flipBounds (NonEmpty b v Tip) = NonEmpty b v Tip
-flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
+{-# INLINE l2rMap #-}
+l2rMap :: WordMap_ L a -> WordMap_ R a
+l2rMap Empty = Empty
+l2rMap (NonEmpty min minV Tip) = NonEmpty min minV Tip
+l2rMap (NonEmpty min minV (Bin max maxV l r)) = NonEmpty max maxV (Bin min minV l r)
 
--- FIXME: better type
-{-# INLINE flipBoundsDR #-}
-flipBoundsDR :: DeleteResult t a -> DeleteResult t' a
-flipBoundsDR (DR b v Tip) = DR b v Tip
-flipBoundsDR (DR b1 v1 (Bin b2 v2 l r)) = DR b2 v2 (Bin b1 v1 l r)
+{-# INLINE r2lMap #-}
+r2lMap :: WordMap_ R a -> WordMap_ L a
+r2lMap Empty = Empty
+r2lMap (NonEmpty max maxV Tip) = NonEmpty max maxV Tip
+r2lMap (NonEmpty max maxV (Bin min minV l r)) = NonEmpty min minV (Bin max maxV l r)
+
+{-# INLINE l2rDR #-}
+l2rDR :: DeleteResult L a -> DeleteResult R a
+l2rDR (DR min minV Tip) = DR min minV Tip
+l2rDR (DR min minV (Bin max maxV l r)) = DR max maxV (Bin min minV l r)
+
+{-# INLINE r2lDR #-}
+r2lDR :: DeleteResult t a -> DeleteResult t' a
+r2lDR (DR max maxV Tip) = DR max maxV Tip
+r2lDR (DR max maxV (Bin min minV l r)) = DR min minV (Bin max maxV l r)
 
 -- | Insert a key/value pair to a left node where the key is smaller than
 -- any present in that node. Requires the xor of the inserted key and the

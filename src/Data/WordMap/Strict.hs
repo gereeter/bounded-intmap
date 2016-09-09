@@ -723,11 +723,11 @@ differenceWithKey combine = start
     goL1 minV1 min1 n1@(Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = NonEmpty min1 minV1 n1
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 min1 < xor min1 max2 -> goL1 minV1 min1 n1 min2 l2 -- min1 is arbitrary here - we just need something from tree 1
-           | max1 > max2 -> flipBounds $ NonEmpty max1 maxV1 (goR2 max1 (Bin min1 minV1 l1 r1) max2 r2)
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | max1 > max2 -> r2lMap $ NonEmpty max1 maxV1 (goR2 max1 (Bin min1 minV1 l1 r1) max2 r2)
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
            | otherwise -> case combine max1 maxV1 maxV2 of
-                Nothing -> flipBounds $ goRFused max1 (Bin min1 minV1 l1 r1) r2
-                Just !maxV1' -> flipBounds $ NonEmpty max1 maxV1' (goRFusedKeep max1 (Bin min1 minV1 l1 r1) r2)
+                Nothing -> r2lMap $ goRFused max1 (Bin min1 minV1 l1 r1) r2
+                Just !maxV1' -> r2lMap $ NonEmpty max1 maxV1' (goRFusedKeep max1 (Bin min1 minV1 l1 r1) r2)
         EQ | max1 > max2 -> binL (goL1 minV1 min1 l1 min2 l2) (NonEmpty max1 maxV1 (goR2 max1 r1 max2 r2))
            | max1 < max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case combine max1 maxV1 maxV2 of
@@ -796,11 +796,11 @@ differenceWithKey combine = start
     goR1 maxV1 max1 n1@(Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = NonEmpty max1 maxV1 n1
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 max1 > xor max1 max2 -> goR1 maxV1 max1 n1 max2 r2 -- max1 is arbitrary here - we just need something from tree 1
-           | min1 < min2 -> flipBounds $ NonEmpty min1 minV1 (goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2)
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | min1 < min2 -> l2rMap $ NonEmpty min1 minV1 (goL2 min1 (Bin max1 maxV1 l1 r1) min2 l2)
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
            | otherwise -> case combine min1 minV1 minV2 of
-                Nothing -> flipBounds $ goLFused min1 (Bin max1 maxV1 l1 r1) l2
-                Just !minV1' -> flipBounds $ NonEmpty min1 minV1' (goLFusedKeep min1 (Bin max1 maxV1 l1 r1) l2)
+                Nothing -> l2rMap $ goLFused min1 (Bin max1 maxV1 l1 r1) l2
+                Just !minV1' -> l2rMap $ NonEmpty min1 minV1' (goLFusedKeep min1 (Bin max1 maxV1 l1 r1) l2)
         EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (goR1 maxV1 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case combine min1 minV1 minV2 of
@@ -908,20 +908,20 @@ intersectionWithKey combine = start
         | min1 > min2 = WordMap (goL1 minV1 min1 root1 min2 root2)
         | otherwise = WordMap (NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 root1 root2) -- we choose min1 arbitrarily, as min1 == min2
     
-    -- TODO: This scheme might produce lots of unnecessary flipBounds calls. This should be rectified.
+    -- TODO: This scheme might produce lots of unnecessary l2r and r2l calls. This should be rectified.
     
     goL1 _     !_   !_  !_   Tip = Empty
     goL1 minV1 min1 Tip min2 n2  = goLookupL1 min1 minV1 (xor min1 min2) n2
     goL1 _ min1 (Bin _ _ _ _) _ (Bin max2 _ _ _) | min1 > max2 = Empty
     goL1 minV1 min1 n1@(Bin max1 maxV1 l1 r1) min2 n2@(Bin max2 maxV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 min1 < xor min1 max2 -> goL1 minV1 min1 n1 min2 l2 -- min1 is arbitrary here - we just need something from tree 1
-           | max1 > max2 -> flipBounds $ goR2 maxV2 max1 (Bin min1 minV1 l1 r1) max2 r2
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
-           | otherwise -> flipBounds $ NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 (Bin min1 minV1 l1 r1) r2
+           | max1 > max2 -> r2lMap $ goR2 maxV2 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2
+           | otherwise -> r2lMap $ NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 (Bin min1 minV1 l1 r1) r2
         EQ | max1 > max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
            | max1 < max2 -> binL (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goL1 minV1 min1 l1 min2 l2 of
-                Empty -> flipBounds (NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 r2)
+                Empty -> r2lMap (NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 r2)
                 NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max1 #! combine max1 maxV1 maxV2 # l' # goRFused max1 r1 r2)
         GT -> goL1 minV1 min1 l1 min2 n2
     
@@ -933,12 +933,12 @@ intersectionWithKey combine = start
         EQ | max1 > max2 -> binL (goL2 minV2 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
            | max1 < max2 -> binL (goL2 minV2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goL2 minV2 min1 l1 min2 l2 of
-                Empty -> flipBounds (NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 r2)
+                Empty -> r2lMap (NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 r2)
                 NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max1 #! combine max1 maxV1 maxV2 # l' # goRFused max1 r1 r2)
         GT | xor min1 min2 < xor min2 max1 -> goL2 minV2 min1 l1 min2 n2 -- min2 is arbitrary here - we just need something from tree 2
-           | max1 > max2 -> flipBounds $ goR2 maxV2 max1 r1 max2 (Bin min2 minV2 l2 r2)
-           | max1 < max2 -> flipBounds $ goR1 maxV1 max1 r1 max2 (Bin min2 minV2 l2 r2)
-           | otherwise -> flipBounds $ NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 (Bin min2 minV2 l2 r2)
+           | max1 > max2 -> r2lMap $ goR2 maxV2 max1 r1 max2 (Bin min2 minV2 l2 r2)
+           | max1 < max2 -> r2lMap $ goR1 maxV1 max1 r1 max2 (Bin min2 minV2 l2 r2)
+           | otherwise -> r2lMap $ NonEmpty max1 #! combine max1 maxV1 maxV2 # goRFused max1 r1 (Bin min2 minV2 l2 r2)
     
     goLFused min = loop
       where
@@ -960,13 +960,13 @@ intersectionWithKey combine = start
     goR1 _ max1 (Bin _ _ _ _) _ (Bin min2 _ _ _) | min2 > max1 = Empty
     goR1 maxV1 max1 n1@(Bin min1 minV1 l1 r1) max2 n2@(Bin min2 minV2 l2 r2) = case compareMSB (xor min1 max1) (xor min2 max2) of
         LT | xor min2 max1 > xor max1 max2 -> goR1 maxV1 max1 n1 max2 r2 -- max1 is arbitrary here - we just need something from tree 1
-           | min1 < min2 -> flipBounds $ goL2 minV2 min1 (Bin max1 maxV1 l1 r1) min2 l2
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
-           | otherwise -> flipBounds $ NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 (Bin max1 maxV1 l1 r1) l2
+           | min1 < min2 -> l2rMap $ goL2 minV2 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2
+           | otherwise -> l2rMap $ NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 (Bin max1 maxV1 l1 r1) l2
         EQ | min1 < min2 -> binR (goL2 minV2 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR1 maxV1 max1 r1 max2 r2)
            | otherwise -> case goR1 maxV1 max1 r1 max2 r2 of
-                Empty -> flipBounds (NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2)
+                Empty -> l2rMap (NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2)
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2 # r')
         GT -> goR1 maxV1 max1 r1 max2 n2
     
@@ -978,12 +978,12 @@ intersectionWithKey combine = start
         EQ | min1 < min2 -> binR (goL2 minV2 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
            | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (goR2 maxV2 max1 r1 max2 r2)
            | otherwise -> case goR2 maxV2 max1 r1 max2 r2 of
-                Empty -> flipBounds (NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2)
+                Empty -> l2rMap (NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2)
                 NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min1 #! combine min1 minV1 minV2 # goLFused min1 l1 l2 # r')
         GT | xor min1 max2 > xor max2 max1 -> goR2 maxV2 max1 r1 max2 n2 -- max2 is arbitrary here - we just need something from tree 2
-           | min1 < min2 -> flipBounds $ goL2 minV2 min1 l1 min2 (Bin max2 maxV2 l2 r2)
-           | min1 > min2 -> flipBounds $ goL1 minV1 min1 l1 min2 (Bin max2 maxV2 l2 r2)
-           | otherwise -> flipBounds $ NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 (Bin max2 maxV2 l2 r2)
+           | min1 < min2 -> l2rMap $ goL2 minV2 min1 l1 min2 (Bin max2 maxV2 l2 r2)
+           | min1 > min2 -> l2rMap $ goL1 minV1 min1 l1 min2 (Bin max2 maxV2 l2 r2)
+           | otherwise -> l2rMap $ NonEmpty min1 #! combine min1 minV1 minV2 # goLFused min1 l1 (Bin max2 maxV2 l2 r2)
     
     goRFused max = loop
       where
@@ -1332,7 +1332,7 @@ mapEitherWithKey func = start
                             Empty -> tl
                             NonEmpty max' maxV' r' -> Bin max' maxV' tl r'
                         f = case fl of
-                            Empty -> flipBounds $ NonEmpty max v fr
+                            Empty -> r2lMap $ NonEmpty max v fr
                             NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max v l' fr)
                     in SP t f
     
@@ -1347,7 +1347,7 @@ mapEitherWithKey func = start
                             Empty -> tr
                             NonEmpty min' minV' l' -> Bin min' minV' l' tr
                         f = case fr of
-                            Empty -> flipBounds $ NonEmpty min v fl
+                            Empty -> l2rMap $ NonEmpty min v fl
                             NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min v fl r')
                     in SP t f
     
@@ -1356,7 +1356,7 @@ mapEitherWithKey func = start
         Left !v  -> let SP tl fl = goFalseL l
                         SP tr fr = goTrueR r
                         t = case tl of
-                            Empty -> flipBounds $ NonEmpty max v tr
+                            Empty -> r2lMap $ NonEmpty max v tr
                             NonEmpty min' minV' l' -> NonEmpty min' minV' (Bin max v l' tr)
                         f = case fr of
                             Empty -> fl
@@ -1371,7 +1371,7 @@ mapEitherWithKey func = start
         Left !v  -> let SP tl fl = goTrueL l
                         SP tr fr = goFalseR r
                         t = case tr of
-                            Empty -> flipBounds $ NonEmpty min v tl
+                            Empty -> l2rMap $ NonEmpty min v tl
                             NonEmpty max' maxV' r' -> NonEmpty max' maxV' (Bin min v tl r')
                         f = case fl of
                             Empty -> fr

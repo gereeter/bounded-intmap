@@ -663,9 +663,9 @@ partitionWithKey p (IntMap m) = let (m1, m2) = W.partitionWithKey (p . w2i) m in
 split :: Key -> IntMap a -> (IntMap a, IntMap a)
 split k m
     | k < 0 = let (glb, WordMap lub) = W.split (i2w k) (WordMap neg)
-              in (IntMap glb, IntMap (WordMap (W.binL nonneg (W.flipBounds lub))))
+              in (IntMap glb, IntMap (WordMap (W.binL nonneg (W.l2rMap lub))))
     | otherwise = let (WordMap glb, lub) = W.split (i2w k) (WordMap nonneg)
-                  in (IntMap (WordMap (W.binL glb (W.flipBounds neg))), IntMap lub)
+                  in (IntMap (WordMap (W.binL glb (W.l2rMap neg))), IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -680,9 +680,9 @@ split k m
 splitLookup :: Key -> IntMap a -> (IntMap a, Maybe a, IntMap a)
 splitLookup k m
     | k < 0 = let (glb, eq, WordMap lub) = W.splitLookup (i2w k) (WordMap neg)
-              in (IntMap glb, eq, IntMap (WordMap (W.binL nonneg (W.flipBounds lub))))
+              in (IntMap glb, eq, IntMap (WordMap (W.binL nonneg (W.l2rMap lub))))
     | otherwise = let (WordMap glb, eq, lub) = W.splitLookup (i2w k) (WordMap nonneg)
-                  in (IntMap (WordMap (W.binL glb (W.flipBounds neg))), eq, IntMap lub)
+                  in (IntMap (WordMap (W.binL glb (W.l2rMap neg))), eq, IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -709,8 +709,8 @@ splitRoot :: IntMap a -> [IntMap a]
 splitRoot (IntMap (WordMap Empty)) = []
 splitRoot m@(IntMap (WordMap (NonEmpty _ _ Tip))) = [m]
 splitRoot (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
-    | w2i (xor min max) < 0 = [IntMap (WordMap (W.flipBounds (NonEmpty max maxV r))), IntMap (WordMap (NonEmpty min minV l))]
-    | otherwise = [IntMap (WordMap (NonEmpty min minV l)), IntMap (WordMap (W.flipBounds (NonEmpty max maxV r)))]
+    | w2i (xor min max) < 0 = [IntMap (WordMap (W.r2lMap (NonEmpty max maxV r))), IntMap (WordMap (NonEmpty min minV l))]
+    | otherwise = [IntMap (WordMap (NonEmpty min minV l)), IntMap (WordMap (W.r2lMap (NonEmpty max maxV r)))]
 
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
@@ -865,6 +865,6 @@ split0 (IntMap (WordMap m@(NonEmpty min _ Tip)))
     | w2i min < 0 = (m, Empty)
     | otherwise = (Empty, m)
 split0 (IntMap (WordMap m@(NonEmpty min minV (Bin max maxV l r))))
-    | w2i (xor min max) < 0 = (W.flipBounds (NonEmpty max maxV r), NonEmpty min minV l)
+    | w2i (xor min max) < 0 = (W.r2lMap (NonEmpty max maxV r), NonEmpty min minV l)
     | w2i max < 0 = (m, Empty)
     | otherwise = (Empty, m)
