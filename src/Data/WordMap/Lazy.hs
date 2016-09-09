@@ -170,7 +170,7 @@ import Prelude hiding (foldr, foldl, lookup, null, map, filter, min, max)
 -- > singleton 1 'a'        == fromList [(1, 'a')]
 -- > size (singleton 1 'a') == 1
 singleton :: Key -> a -> WordMap a
-singleton k v = NonEmpty k v Tip
+singleton k v = WordMap (NonEmpty k v Tip)
 
 -- | /O(min(n,W))/. Insert a new key\/value pair in the map.
 -- If the key is already present in the map, the associated value is
@@ -183,11 +183,11 @@ singleton k v = NonEmpty k v Tip
 insert :: Key -> a -> WordMap a -> WordMap a
 insert = start
   where
-    start !k v Empty = NonEmpty k v Tip
-    start !k v (NonEmpty min minV root)
-        | k > min = NonEmpty min minV (goL k v (xor min k) min root)
-        | k < min = NonEmpty k v (insertMinL (xor min k) min minV root)
-        | otherwise = NonEmpty k v root
+    start !k v (WordMap Empty) = WordMap (NonEmpty k v Tip)
+    start !k v (WordMap (NonEmpty min minV root))
+        | k > min = WordMap (NonEmpty min minV (goL k v (xor min k) min root))
+        | k < min = WordMap (NonEmpty k v (insertMinL (xor min k) min minV root))
+        | otherwise = WordMap (NonEmpty k v root)
     
     goL !k v !_        !_    Tip = Bin k v Tip Tip
     goL !k v !xorCache !min (Bin max maxV l r)
@@ -223,11 +223,11 @@ insert = start
 insertWith :: (a -> a -> a) -> Key -> a -> WordMap a -> WordMap a
 insertWith combine = start
   where
-    start !k v Empty = NonEmpty k v Tip
-    start !k v (NonEmpty min minV root)
-        | k > min = NonEmpty min minV (goL k v (xor min k) min root)
-        | k < min = NonEmpty k v (insertMinL (xor min k) min minV root)
-        | otherwise = NonEmpty k (combine v minV) root
+    start !k v (WordMap Empty) = WordMap (NonEmpty k v Tip)
+    start !k v (WordMap (NonEmpty min minV root))
+        | k > min = WordMap (NonEmpty min minV (goL k v (xor min k) min root))
+        | k < min = WordMap (NonEmpty k v (insertMinL (xor min k) min minV root))
+        | otherwise = WordMap (NonEmpty k (combine v minV) root)
     
     goL !k v !_        !_    Tip = Bin k v Tip Tip
     goL !k v !xorCache !min (Bin max maxV l r)
@@ -281,12 +281,12 @@ insertWithKey f k = insertWith (f k) k
 insertLookupWithKey :: (Key -> a -> a -> a) -> Key -> a -> WordMap a -> (Maybe a, WordMap a)
 insertLookupWithKey combine !k !v = toPair . start
   where
-    start Empty = Nothing :*: NonEmpty k v Tip
-    start (NonEmpty min minV root)
+    start (WordMap Empty) = Nothing :*: WordMap (NonEmpty k v Tip)
+    start (WordMap (NonEmpty min minV root))
         | k > min = let mv :*: root' = goL (xor min k) min root
-                    in  mv :*: NonEmpty min minV root'
-        | k < min = Nothing :*: NonEmpty k v (insertMinL (xor min k) min minV root)
-        | otherwise = Just minV :*: NonEmpty k (combine k v minV) root
+                    in  mv :*: WordMap (NonEmpty min minV root')
+        | k < min = Nothing :*: WordMap (NonEmpty k v (insertMinL (xor min k) min minV root))
+        | otherwise = Just minV :*: WordMap (NonEmpty k (combine k v minV) root)
     
     goL !_        _    Tip = Nothing :*: Bin k v Tip Tip
     goL !xorCache min (Bin max maxV l r)
@@ -323,11 +323,11 @@ insertLookupWithKey combine !k !v = toPair . start
 adjust :: (a -> a) -> Key -> WordMap a -> WordMap a
 adjust f k = k `seq` start
   where
-    start Empty = Empty
-    start m@(NonEmpty min minV node)
-        | k > min = NonEmpty min minV (goL (xor min k) min node)
+    start (WordMap Empty) = WordMap Empty
+    start m@(WordMap (NonEmpty min minV node))
+        | k > min = WordMap (NonEmpty min minV (goL (xor min k) min node))
         | k < min = m
-        | otherwise = NonEmpty min (f minV) node
+        | otherwise = WordMap (NonEmpty min (f minV) node)
     
     goL !_        _      Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
@@ -368,19 +368,19 @@ adjustWithKey f k = adjust (f k) k
 update :: (a -> Maybe a) -> Key -> WordMap a -> WordMap a
 update f k = k `seq` start
   where
-    start Empty = Empty
-    start m@(NonEmpty min minV Tip)
+    start (WordMap Empty) = WordMap Empty
+    start m@(WordMap (NonEmpty min minV Tip))
         | k == min = case f minV of
-            Nothing -> Empty
-            Just minV' -> NonEmpty min minV' Tip
+            Nothing -> WordMap Empty
+            Just minV' -> WordMap (NonEmpty min minV' Tip)
         | otherwise = m
-    start m@(NonEmpty min minV root@(Bin max maxV l r))
+    start m@(WordMap (NonEmpty min minV root@(Bin max maxV l r)))
         | k < min = m
         | k == min = case f minV of
             Nothing -> let DR min' minV' root' = deleteMinL max maxV l r
-                       in NonEmpty min' minV' root'
-            Just minV' -> NonEmpty min minV' root
-        | otherwise = NonEmpty min minV (goL (xor min k) min root)
+                       in WordMap (NonEmpty min' minV' root')
+            Just minV' -> WordMap (NonEmpty min minV' root)
+        | otherwise = WordMap (NonEmpty min minV (goL (xor min k) min root))
     
     goL !_        _      Tip = Tip
     goL !xorCache min n@(Bin max maxV l r)
@@ -427,20 +427,20 @@ updateWithKey f k = update (f k) k
 updateLookupWithKey :: (Key -> a -> Maybe a) -> Key -> WordMap a -> (Maybe a, WordMap a)
 updateLookupWithKey f k = k `seq` start
   where
-    start Empty = (Nothing, Empty)
-    start m@(NonEmpty min minV Tip)
+    start (WordMap Empty) = (Nothing, WordMap Empty)
+    start m@(WordMap (NonEmpty min minV Tip))
         | k == min = case f min minV of
-            Nothing -> (Just minV, Empty)
-            Just minV' -> (Just minV, NonEmpty min minV' Tip)
+            Nothing -> (Just minV, WordMap Empty)
+            Just minV' -> (Just minV, WordMap (NonEmpty min minV' Tip))
         | otherwise = (Nothing, m)
-    start m@(NonEmpty min minV root@(Bin max maxV l r))
+    start m@(WordMap (NonEmpty min minV root@(Bin max maxV l r)))
         | k < min = (Nothing, m)
         | k == min = case f min minV of
             Nothing -> let DR min' minV' root' = deleteMinL max maxV l r
-                       in (Just minV, NonEmpty min' minV' root')
-            Just minV' -> (Just minV, NonEmpty min minV' root)
+                       in (Just minV, WordMap (NonEmpty min' minV' root'))
+            Just minV' -> (Just minV, WordMap (NonEmpty min minV' root))
         | otherwise = let (mv, root') = goL (xor min k) min root
-                      in  (mv, NonEmpty min minV root')
+                      in  (mv, WordMap (NonEmpty min minV root'))
     
     goL !_        _      Tip = (Nothing, Tip)
     goL !xorCache min n@(Bin max maxV l r)
@@ -529,12 +529,12 @@ unionWith f = unionWithKey (const f)
 unionWithKey :: (Key -> a -> a -> a) -> WordMap a -> WordMap a -> WordMap a
 unionWithKey combine = start
   where
-    start Empty m2 = m2
-    start m1 Empty = m1
-    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
-        | min1 < min2 = NonEmpty min1 minV1 (goL2 minV2 min1 root1 min2 root2)
-        | min1 > min2 = NonEmpty min2 minV2 (goL1 minV1 min1 root1 min2 root2)
-        | otherwise = NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 root1 root2) -- we choose min1 arbitrarily, as min1 == min2
+    start (WordMap Empty) m2 = m2
+    start m1 (WordMap Empty) = m1
+    start (WordMap (NonEmpty min1 minV1 root1)) (WordMap (NonEmpty min2 minV2 root2))
+        | min1 < min2 = WordMap (NonEmpty min1 minV1 (goL2 minV2 min1 root1 min2 root2))
+        | min1 > min2 = WordMap (NonEmpty min2 minV2 (goL1 minV1 min1 root1 min2 root2))
+        | otherwise = WordMap (NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 root1 root2)) -- we choose min1 arbitrarily, as min1 == min2
     
     -- TODO: Should I bind 'minV1' in a closure? It never changes.
     -- TODO: Should I cache @xor min1 min2@?
@@ -712,14 +712,14 @@ differenceWith f = differenceWithKey (const f)
 differenceWithKey :: (Key -> a -> b -> Maybe a) -> WordMap a -> WordMap b -> WordMap a
 differenceWithKey combine = start
   where
-    start Empty !_ = Empty
-    start !m Empty = m
-    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
-        | min1 < min2 = NonEmpty min1 minV1 (goL2 min1 root1 min2 root2)
-        | min1 > min2 = goL1 minV1 min1 root1 min2 root2
+    start (WordMap Empty) !_ = WordMap Empty
+    start !m (WordMap Empty) = m
+    start (WordMap (NonEmpty min1 minV1 root1)) (WordMap (NonEmpty min2 minV2 root2))
+        | min1 < min2 = WordMap (NonEmpty min1 minV1 (goL2 min1 root1 min2 root2))
+        | min1 > min2 = WordMap (goL1 minV1 min1 root1 min2 root2)
         | otherwise = case combine min1 minV1 minV2 of
-            Nothing -> goLFused min1 root1 root2
-            Just minV1' -> NonEmpty min1 minV1' (goLFusedKeep min1 root1 root2)
+            Nothing -> WordMap (goLFused min1 root1 root2)
+            Just minV1' -> WordMap (NonEmpty min1 minV1' (goLFusedKeep min1 root1 root2))
     
     goL1 minV1 min1 Tip min2 n2 = goLookupL min1 minV1 (xor min1 min2) n2
     goL1 minV1 min1 n1 _ Tip = NonEmpty min1 minV1 n1
@@ -904,12 +904,12 @@ intersectionWith f = intersectionWithKey (const f)
 intersectionWithKey :: (Key -> a -> b -> c) -> WordMap a -> WordMap b -> WordMap c
 intersectionWithKey combine = start
   where
-    start Empty !_ = Empty
-    start !_ Empty = Empty
-    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
-        | min1 < min2 = goL2 minV2 min1 root1 min2 root2
-        | min1 > min2 = goL1 minV1 min1 root1 min2 root2
-        | otherwise = NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 root1 root2) -- we choose min1 arbitrarily, as min1 == min2
+    start (WordMap Empty) !_ = WordMap Empty
+    start !_ (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min1 minV1 root1)) (WordMap (NonEmpty min2 minV2 root2))
+        | min1 < min2 = WordMap (goL2 minV2 min1 root1 min2 root2)
+        | min1 > min2 = WordMap (goL1 minV1 min1 root1 min2 root2)
+        | otherwise = WordMap (NonEmpty min1 (combine min1 minV1 minV2) (goLFused min1 root1 root2)) -- we choose min1 arbitrarily, as min1 == min2
     
     -- TODO: This scheme might produce lots of unnecessary flipBounds calls. This should be rectified.
     
@@ -1052,8 +1052,8 @@ map = fmap
 mapWithKey :: (Key -> a -> b) -> WordMap a -> WordMap b
 mapWithKey f = start
   where
-    start Empty = Empty
-    start (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
     
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
@@ -1069,8 +1069,8 @@ mapWithKey f = start
 traverseWithKey :: Applicative f => (Key -> a -> f b) -> WordMap a -> f (WordMap b)
 traverseWithKey f = start
   where
-    start  Empty = pure Empty
-    start (NonEmpty min minV root) = NonEmpty min <$> f min minV <*> goL root
+    start (WordMap Empty) = pure (WordMap Empty)
+    start (WordMap (NonEmpty min minV root)) = (\minV' root' -> WordMap (NonEmpty min minV' root')) <$> f min minV <*> goL root
     
     goL  Tip = pure Tip
     goL (Bin max maxV l r) = (\l' r' maxV' -> Bin max maxV' l' r') <$> goL l <*> goR r <*> f max maxV
@@ -1094,11 +1094,11 @@ mapAccum f = mapAccumWithKey (\a _ x -> f a x)
 mapAccumWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
 mapAccumWithKey f = start
   where
-    start a  Empty = (a, Empty)
-    start a (NonEmpty min minV root) =
+    start a (WordMap Empty) = (a, WordMap Empty)
+    start a (WordMap (NonEmpty min minV root)) =
         let (a',  minV') = f a min minV
             (a'', root') = goL root a'
-        in  (a'', NonEmpty min minV' root')
+        in  (a'', WordMap (NonEmpty min minV' root'))
     
     goL  Tip a = (a, Tip)
     goL (Bin max maxV l r) a =
@@ -1119,11 +1119,11 @@ mapAccumWithKey f = start
 mapAccumRWithKey :: (a -> Key -> b -> (a, c)) -> a -> WordMap b -> (a, WordMap c)
 mapAccumRWithKey f = start
   where
-    start a Empty = (a, Empty)
-    start a (NonEmpty min minV root) = 
+    start a (WordMap Empty) = (a, WordMap Empty)
+    start a (WordMap (NonEmpty min minV root)) = 
         let (a',  root') = goL root a
             (a'', minV') = f a' min minV
-        in  (a'', NonEmpty min minV' root')
+        in  (a'', WordMap (NonEmpty min minV' root'))
     
     goL  Tip a = (a, Tip)
     goL (Bin max maxV l r) a =
@@ -1250,10 +1250,10 @@ mapMaybe f = mapMaybeWithKey (const f)
 mapMaybeWithKey :: (Key -> a -> Maybe b) -> WordMap a -> WordMap b
 mapMaybeWithKey f = start
   where
-    start Empty = Empty
-    start (NonEmpty min minV root) = case f min minV of
-        Just minV' -> NonEmpty min minV' (goL root)
-        Nothing -> goDeleteL root
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root)) = case f min minV of
+        Just minV' -> WordMap (NonEmpty min minV' (goL root))
+        Nothing -> WordMap (goDeleteL root)
     
     goL Tip = Tip
     goL (Bin max maxV l r) = case f max maxV of
@@ -1309,12 +1309,12 @@ mapEither f = mapEitherWithKey (const f)
 mapEitherWithKey :: (Key -> a -> Either b c) -> WordMap a -> (WordMap b, WordMap c)
 mapEitherWithKey func = start
   where
-    start Empty = (Empty, Empty)
-    start (NonEmpty min minV root) = case func min minV of
+    start (WordMap Empty) = (WordMap Empty, WordMap Empty)
+    start (WordMap (NonEmpty min minV root)) = case func min minV of
         Left v  -> let SP t f = goTrueL root
-                   in (NonEmpty min v t, f)
+                   in (WordMap (NonEmpty min v t), WordMap f)
         Right v -> let SP t f = goFalseL root
-                   in (t, NonEmpty min v f)
+                   in (WordMap t, WordMap (NonEmpty min v f))
     
     goTrueL Tip = SP Tip Empty
     goTrueL (Bin max maxV l r) = case func max maxV of
@@ -1381,7 +1381,7 @@ mapEitherWithKey func = start
 -- > updateMin (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "Xb"), (5, "a")]
 -- > updateMin (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 updateMin :: (a -> Maybe a) -> WordMap a -> WordMap a
-updateMin _ Empty = Empty
+updateMin _ (WordMap Empty) = WordMap Empty
 updateMin f m = update f (fst (findMin m)) m
 
 -- | /O(min(n,W))/. Update the value at the maximal key.
@@ -1389,7 +1389,7 @@ updateMin f m = update f (fst (findMin m)) m
 -- > updateMax (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "Xa")]
 -- > updateMax (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
 updateMax :: (a -> Maybe a) -> WordMap a -> WordMap a
-updateMax _ Empty = Empty
+updateMax _ (WordMap Empty) = WordMap Empty
 updateMax f m = update f (fst (findMax m)) m
 
 -- | /O(min(n,W))/. Update the value at the minimal key.
@@ -1397,7 +1397,7 @@ updateMax f m = update f (fst (findMax m)) m
 -- > updateMinWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"3:b"), (5,"a")]
 -- > updateMinWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 updateMinWithKey :: (Key -> a -> Maybe a) -> WordMap a -> WordMap a
-updateMinWithKey _ Empty = Empty
+updateMinWithKey _ (WordMap Empty) = WordMap Empty
 updateMinWithKey f m = updateWithKey f (fst (findMin m)) m
 
 -- | /O(min(n,W))/. Update the value at the maximal key.
@@ -1405,5 +1405,5 @@ updateMinWithKey f m = updateWithKey f (fst (findMin m)) m
 -- > updateMaxWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"b"), (5,"5:a")]
 -- > updateMaxWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
 updateMaxWithKey :: (Key -> a -> Maybe a) -> WordMap a -> WordMap a
-updateMaxWithKey _ Empty = Empty
+updateMaxWithKey _ (WordMap Empty) = WordMap Empty
 updateMaxWithKey f m = updateWithKey f (fst (findMax m)) m

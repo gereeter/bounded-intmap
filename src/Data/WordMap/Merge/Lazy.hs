@@ -32,18 +32,18 @@ import Prelude hiding (min, max)
 
 mapMissing :: (Key -> a -> b) -> WhenMissing a b
 mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
-    start Empty = Empty
-    start (NonEmpty min minV root) = NonEmpty min (f min minV) (go root)
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
 
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
 mapMaybeMissing :: (Key -> a -> Maybe b) -> WhenMissing a b
 mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
-    start Empty = Empty
-    start (NonEmpty min minV root) = case f min minV of
-        Just minV' -> NonEmpty min minV' (goLKeep root)
-        Nothing -> goL root
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root)) = case f min minV of
+        Just minV' -> WordMap (NonEmpty min minV' (goLKeep root))
+        Nothing -> WordMap (goL root)
 
     goLKeep Tip = Tip
     goLKeep (Bin max maxV l r) = case f max maxV of
@@ -79,10 +79,10 @@ mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
 
 filterMissing :: (Key -> a -> Bool) -> WhenMissing a a
 filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep start where
-    start Empty = Empty
-    start (NonEmpty min minV root)
-        | p min minV = NonEmpty min minV (goLKeep root)
-        | otherwise = goL root
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root))
+        | p min minV = WordMap (NonEmpty min minV (goLKeep root))
+        | otherwise = WordMap (goL root)
 
     goLKeep Tip = Tip
     goLKeep (Bin max maxV l r)

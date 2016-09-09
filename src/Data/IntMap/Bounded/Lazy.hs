@@ -162,7 +162,7 @@ import Data.Bits (xor)
 
 import Data.IntMap.Bounded.Base
 
-import Data.WordMap.Base (WordMap(..), Node(..))
+import Data.WordMap.Base (WordMap(..), WordMap_(..), Node(..))
 import qualified Data.WordMap.Lazy as W
 
 import qualified Data.IntSet (IntSet, toList)
@@ -397,14 +397,14 @@ mapWithKey f (IntMap m) = IntMap (W.mapWithKey (f . w2i) m)
 traverseWithKey :: Applicative f => (Key -> a -> f b) -> IntMap a -> f (IntMap b)
 traverseWithKey f = start
   where
-    start (IntMap Empty) = pure (IntMap Empty)
-    start (IntMap (NonEmpty min minV Tip)) = (\minV' -> IntMap (NonEmpty min minV' Tip)) <$> f (w2i min) minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = pure (IntMap (WordMap Empty))
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = (\minV' -> IntMap (WordMap (NonEmpty min minV' Tip))) <$> f (w2i min) minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 =
-            (\r' maxV' minV' l' -> IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            (\r' maxV' minV' l' -> IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
             <$> goR r <*> f (w2i max) maxV <*> f (w2i min) minV <*> goL l
         | otherwise =
-            (\minV' l' r' maxV' -> IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            (\minV' l' r' maxV' -> IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
             <$> f (w2i min) minV <*> goL l <*> goR r <*> f (w2i max) maxV 
     
     goL Tip = pure Tip
@@ -429,23 +429,23 @@ mapAccum f = mapAccumWithKey (\a _ x -> f a x)
 mapAccumWithKey :: (a -> Key -> b -> (a, c)) -> a -> IntMap b -> (a, IntMap c)
 mapAccumWithKey f = start
   where
-    start a (IntMap Empty) = (a, IntMap Empty)
-    start a (IntMap (NonEmpty min minV Tip)) =
+    start a (IntMap (WordMap Empty)) = (a, IntMap (WordMap Empty))
+    start a (IntMap (WordMap (NonEmpty min minV Tip))) =
         let (a', minV') = f a (w2i min) minV
-        in  (a', IntMap (NonEmpty min minV' Tip))
-    start a (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        in  (a', IntMap (WordMap (NonEmpty min minV' Tip)))
+    start a (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             let (a',    r')    = goR r a
                 (a'',   maxV') = f a' (w2i max) maxV
                 (a''',  minV') = f a'' (w2i min) minV
                 (a'''', l')    = goL l a'''
-            in  (a'''', IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            in  (a'''', IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
         | otherwise =
             let (a',    minV') = f a (w2i min) minV
                 (a'',   l')    = goL l a'
                 (a''',  r')    = goR r a''
                 (a'''', maxV') = f a''' (w2i max) maxV
-            in  (a'''', IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            in  (a'''', IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
     
     goL  Tip a = (a, Tip)
     goL (Bin max maxV l r) a =
@@ -466,23 +466,23 @@ mapAccumWithKey f = start
 mapAccumRWithKey :: (a -> Key -> b -> (a, c)) -> a -> IntMap b -> (a, IntMap c)
 mapAccumRWithKey f = start
   where
-    start a (IntMap Empty) = (a, IntMap Empty)
-    start a (IntMap (NonEmpty min minV Tip)) =
+    start a (IntMap (WordMap Empty)) = (a, IntMap (WordMap Empty))
+    start a (IntMap (WordMap (NonEmpty min minV Tip))) =
         let (a', minV') = f a (w2i min) minV
-        in  (a', IntMap (NonEmpty min minV' Tip))
-    start a (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        in  (a', IntMap (WordMap (NonEmpty min minV' Tip)))
+    start a (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             let (a',    l')    = goL l a
                 (a'',   minV') = f a' (w2i min) minV
                 (a''',  maxV') = f a'' (w2i max) maxV
                 (a'''', r')    = goR r a'''
-            in  (a'''', IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            in  (a'''', IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
         | otherwise =
             let (a',    maxV') = f a (w2i max) maxV
                 (a'',   r')    = goR r a'
                 (a''',  l')    = goL l a''
                 (a'''', minV') = f a''' (w2i min) minV
-            in  (a'''', IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+            in  (a'''', IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
     
     goL  Tip a = (a, Tip)
     goL (Bin max maxV l r) a =
@@ -644,7 +644,7 @@ mapEitherWithKey f (IntMap m) = let (m1, m2) = W.mapEitherWithKey (f . w2i) m in
 -- > updateMin (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "Xb"), (5, "a")]
 -- > updateMin (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 updateMin :: (a -> Maybe a) -> IntMap a -> IntMap a
-updateMin _ (IntMap Empty) = IntMap Empty
+updateMin _ (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 updateMin f m = update f (fst (findMin m)) m
 
 -- | /O(min(n,W))/. Update the value at the maximal key.
@@ -652,7 +652,7 @@ updateMin f m = update f (fst (findMin m)) m
 -- > updateMax (\ a -> Just ("X" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3, "b"), (5, "Xa")]
 -- > updateMax (\ _ -> Nothing)         (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
 updateMax :: (a -> Maybe a) -> IntMap a -> IntMap a
-updateMax _ (IntMap Empty) = IntMap Empty
+updateMax _ (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 updateMax f m = update f (fst (findMax m)) m
 
 -- | /O(min(n,W))/. Update the value at the minimal key.
@@ -660,7 +660,7 @@ updateMax f m = update f (fst (findMax m)) m
 -- > updateMinWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"3:b"), (5,"a")]
 -- > updateMinWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 5 "a"
 updateMinWithKey :: (Key -> a -> Maybe a) -> IntMap a -> IntMap a
-updateMinWithKey _ (IntMap Empty) = IntMap Empty
+updateMinWithKey _ (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 updateMinWithKey f m = updateWithKey f (fst (findMin m)) m
 
 -- | /O(min(n,W))/. Update the value at the maximal key.
@@ -668,5 +668,5 @@ updateMinWithKey f m = updateWithKey f (fst (findMin m)) m
 -- > updateMaxWithKey (\ k a -> Just ((show k) ++ ":" ++ a)) (fromList [(5,"a"), (3,"b")]) == fromList [(3,"b"), (5,"5:a")]
 -- > updateMaxWithKey (\ _ _ -> Nothing)                     (fromList [(5,"a"), (3,"b")]) == singleton 3 "b"
 updateMaxWithKey :: (Key -> a -> Maybe a) -> IntMap a -> IntMap a
-updateMaxWithKey _ (IntMap Empty) = IntMap Empty
+updateMaxWithKey _ (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 updateMaxWithKey f m = updateWithKey f (fst (findMax m)) m

@@ -17,7 +17,7 @@ data WhenMissing a b = WhenMissing {
 
 {-# INLINE dropMissing #-}
 dropMissing :: WhenMissing a b
-dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const Empty)
+dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (WordMap Empty))
 
 {-# INLINE preserveMissing #-}
 preserveMissing :: WhenMissing a a
@@ -39,19 +39,19 @@ intersectionM = merge dropMissing dropMissing (WhenMatched (\_ a _ -> Just a))
 {-# INLINE merge #-}
 merge :: WhenMissing a c -> WhenMissing b c -> WhenMatched a b c -> WordMap a -> WordMap b -> WordMap c
 merge miss1 miss2 match = start where
-    start Empty Empty = Empty
-    start Empty !m2 = missingAll miss2 m2
-    start !m1 Empty = missingAll miss1 m1
-    start (NonEmpty min1 minV1 root1) (NonEmpty min2 minV2 root2)
+    start (WordMap Empty) (WordMap Empty) = WordMap Empty
+    start (WordMap Empty) !m2 = missingAll miss2 m2
+    start !m1 (WordMap Empty) = missingAll miss1 m1
+    start (WordMap (NonEmpty min1 minV1 root1)) (WordMap (NonEmpty min2 minV2 root2))
         | min1 < min2 = case missingSingle miss1 min1 minV1 of
-            Nothing -> goL2 minV2 min1 root1 min2 root2
-            Just minV' -> NonEmpty min1 minV' (goL2Keep minV2 min1 root1 min2 root2)
+            Nothing -> WordMap (goL2 minV2 min1 root1 min2 root2)
+            Just minV' -> WordMap (NonEmpty min1 minV' (goL2Keep minV2 min1 root1 min2 root2))
         | min1 > min2 = case missingSingle miss2 min2 minV2 of
-            Nothing -> goL1 minV1 min1 root1 min2 root2
-            Just minV' -> NonEmpty min2 minV' (goL1Keep minV1 min1 root1 min2 root2)
+            Nothing -> WordMap (goL1 minV1 min1 root1 min2 root2)
+            Just minV' -> WordMap (NonEmpty min2 minV' (goL1Keep minV1 min1 root1 min2 root2))
         | otherwise = case matchedSingle match min1 minV1 minV2 of
-            Nothing -> goLFused min1 root1 root2
-            Just minV' -> NonEmpty min1 minV' (goLFusedKeep min1 root1 root2)
+            Nothing -> WordMap (goLFused min1 root1 root2)
+            Just minV' -> WordMap (NonEmpty min1 minV' (goLFusedKeep min1 root1 root2))
     
     -- Merge two left nodes and a minimum value for the first node into a new left node
     -- Precondition: min1 > min2

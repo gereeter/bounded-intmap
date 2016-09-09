@@ -18,7 +18,7 @@ import Data.Functor ((<$>))
 import Data.Word (Word)
 import Data.Bits (xor)
 
-import Data.WordMap.Base (WordMap(..), Node(..))
+import Data.WordMap.Base (WordMap(..), WordMap_(..), Node(..))
 import qualified Data.WordMap.Base as W
 import qualified Data.WordMap.Lazy as W (unionM, differenceM, intersectionM)
 
@@ -45,14 +45,14 @@ instance Data.Foldable.Foldable IntMap where
 instance Traversable IntMap where
     traverse f = start
       where
-        start (IntMap Empty) = pure (IntMap Empty)
-        start (IntMap (NonEmpty min minV Tip)) = (\minV' -> IntMap (NonEmpty min minV' Tip)) <$> f minV
-        start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+        start (IntMap (WordMap Empty)) = pure (IntMap (WordMap Empty))
+        start (IntMap (WordMap (NonEmpty min minV Tip))) = (\minV' -> IntMap (WordMap (NonEmpty min minV' Tip))) <$> f minV
+        start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
             | w2i (xor min max) < 0 =
-                (\r' maxV' minV' l' -> IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+                (\r' maxV' minV' l' -> IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
                 <$> goR r <*> f maxV <*> f minV <*> goL l
             | otherwise =
-                (\minV' l' r' maxV' -> IntMap (NonEmpty min minV' (Bin max maxV' l' r')))
+                (\minV' l' r' maxV' -> IntMap (WordMap (NonEmpty min minV' (Bin max maxV' l' r'))))
                 <$> f minV <*> goL l <*> goR r <*> f maxV 
         
         goL Tip = pure Tip
@@ -114,11 +114,11 @@ findWithDefault def k (IntMap m) = W.findWithDefault def (i2w k) m
 lookupLT :: Key -> IntMap a -> Maybe (Key, a)
 lookupLT k = k `seq` start
   where
-    start (IntMap Empty) = Nothing
-    start (IntMap (NonEmpty min minV Tip))
+    start (IntMap (WordMap Empty)) = Nothing
+    start (IntMap (WordMap (NonEmpty min minV Tip)))
         | w2i min < k = Just (w2i min, minV)
         | otherwise = Nothing
-    start (IntMap (NonEmpty min minV node@(Bin max maxV l r)))
+    start (IntMap (WordMap (NonEmpty min minV node@(Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             if w2i min < k -- if this is true, we know the result is positive
             then Just (goL (xor min (i2w k)) min minV l)
@@ -160,11 +160,11 @@ lookupLT k = k `seq` start
 lookupLE :: Key -> IntMap a -> Maybe (Key, a)
 lookupLE k = k `seq` start
   where
-    start (IntMap Empty) = Nothing
-    start (IntMap (NonEmpty min minV Tip))
+    start (IntMap (WordMap Empty)) = Nothing
+    start (IntMap (WordMap (NonEmpty min minV Tip)))
         | w2i min <= k = Just (w2i min, minV)
         | otherwise = Nothing
-    start (IntMap (NonEmpty min minV node@(Bin max maxV l r)))
+    start (IntMap (WordMap (NonEmpty min minV node@(Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             if w2i min <= k -- if this is true, we know the result is positive
             then Just (goL (xor min (i2w k)) min minV l)
@@ -205,11 +205,11 @@ lookupLE k = k `seq` start
 lookupGT :: Key -> IntMap a -> Maybe (Key, a)
 lookupGT k = k `seq` start
   where
-    start (IntMap Empty) = Nothing
-    start (IntMap (NonEmpty min minV Tip))
+    start (IntMap (WordMap Empty)) = Nothing
+    start (IntMap (WordMap (NonEmpty min minV Tip)))
         | w2i min > k = Just (w2i min, minV)
         | otherwise = Nothing
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             if w2i max > k -- if this is true, we know the result is negative
             then Just (goR (xor (i2w k) max) max maxV r)
@@ -251,11 +251,11 @@ lookupGT k = k `seq` start
 lookupGE :: Key -> IntMap a -> Maybe (Key, a)
 lookupGE k = k `seq` start
   where
-    start (IntMap Empty) = Nothing
-    start (IntMap (NonEmpty min minV Tip))
+    start (IntMap (WordMap Empty)) = Nothing
+    start (IntMap (WordMap (NonEmpty min minV Tip)))
         | w2i min >= k = Just (w2i min, minV)
         | otherwise = Nothing
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 =
             if w2i max >= k -- if this is true, we know the result is negative
             then Just (goR (xor (i2w k) max) max maxV r)
@@ -348,9 +348,9 @@ intersectionM (IntMap m1) (IntMap m2) = IntMap (W.intersectionM m1 m2)
 foldr :: (a -> b -> b) -> b -> IntMap a -> b
 foldr f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty _ minV Tip)) = f minV z
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty _ minV Tip))) = f minV z
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goR r (f maxV (f minV (goL l z)))
         | otherwise = f minV (goL l (goR r (f maxV z)))
     
@@ -373,9 +373,9 @@ foldr f z = start
 foldl :: (a -> b -> a) -> a -> IntMap b -> a
 foldl f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty _ minV Tip)) = f z minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty _ minV Tip))) = f z minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goL (f (f (goR z r) maxV) minV) l
         | otherwise = f (goR (goL (f z minV) l) r) maxV
 
@@ -399,9 +399,9 @@ foldl f z = start
 foldrWithKey :: (Key -> a -> b -> b) -> b -> IntMap a -> b
 foldrWithKey f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty min minV Tip)) = f' min minV z
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = f' min minV z
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goR r (f' max maxV (f' min minV (goL l z)))
         | otherwise = f' min minV (goL l (goR r (f' max maxV z)))
     
@@ -427,9 +427,9 @@ foldrWithKey f z = start
 foldlWithKey :: (a -> Key -> b -> a) -> a -> IntMap b -> a
 foldlWithKey f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty min minV Tip)) = f' z min minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = f' z min minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goL (f' (f' (goR z r) max maxV) min minV) l
         | otherwise = f' (goR (goL (f' z min minV) l) r) max maxV
 
@@ -449,9 +449,9 @@ foldlWithKey f z = start
 foldMapWithKey :: Monoid m => (Key -> a -> m) -> IntMap a -> m
 foldMapWithKey f = start
   where
-    start (IntMap Empty) = mempty
-    start (IntMap (NonEmpty min minV Tip)) = f (w2i min) minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = mempty
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = f (w2i min) minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goR r `mappend` f (w2i max) maxV `mappend` f (w2i min) minV `mappend` goL l
         | otherwise = f (w2i min) minV `mappend` goL l `mappend` goR r `mappend` f (w2i max) maxV
     
@@ -468,9 +468,9 @@ foldMapWithKey f = start
 foldr' :: (a -> b -> b) -> b -> IntMap a -> b
 foldr' f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty _ minV Tip)) = f minV $! z
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty _ minV Tip))) = f minV $! z
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goR r $! f maxV $! f minV $! goL l $! z
         | otherwise = f minV $! goL l $! goR r $! f maxV $! z
     
@@ -487,9 +487,9 @@ foldr' f z = start
 foldl' :: (a -> b -> a) -> a -> IntMap b -> a
 foldl' f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty _ minV Tip)) = f z minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty _ minV Tip))) = f z minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = s goL (s f (s f (s goR z r) maxV) minV) l
         | otherwise = s f (s goR (s goL (s f z minV) l) r) maxV
 
@@ -508,9 +508,9 @@ foldl' f z = start
 foldrWithKey' :: (Key -> a -> b -> b) -> b -> IntMap a -> b
 foldrWithKey' f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty min minV Tip)) = f' min minV $! z
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = f' min minV $! z
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = goR r $! f' max maxV $! f' min minV $! goL l $! z
         | otherwise = f' min minV $! goL l $! goR r $! f' max maxV $! z
     
@@ -529,9 +529,9 @@ foldrWithKey' f z = start
 foldlWithKey' :: (a -> Key -> b -> a) -> a -> IntMap b -> a
 foldlWithKey' f z = start
   where
-    start (IntMap Empty) = z
-    start (IntMap (NonEmpty min minV Tip)) = s f' z min minV
-    start (IntMap (NonEmpty min minV (Bin max maxV l r)))
+    start (IntMap (WordMap Empty)) = z
+    start (IntMap (WordMap (NonEmpty min minV Tip))) = s f' z min minV
+    start (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
         | w2i (xor min max) < 0 = s goL (s f' (s f' (s goR z r) max maxV) min minV) l
         | otherwise = s f' (s goR (s goL (s f' z min minV) l) r) max maxV
 
@@ -662,10 +662,10 @@ partitionWithKey p (IntMap m) = let (m1, m2) = W.partitionWithKey (p . w2i) m in
 -- > split 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], empty)
 split :: Key -> IntMap a -> (IntMap a, IntMap a)
 split k m
-    | k < 0 = let (glb, lub) = W.split (i2w k) neg
-              in (IntMap glb, IntMap (W.binL nonneg (W.flipBounds lub)))
-    | otherwise = let (glb, lub) = W.split (i2w k) nonneg
-                  in (IntMap (W.binL glb (W.flipBounds neg)), IntMap lub)
+    | k < 0 = let (glb, WordMap lub) = W.split (i2w k) (WordMap neg)
+              in (IntMap glb, IntMap (WordMap (W.binL nonneg (W.flipBounds lub))))
+    | otherwise = let (WordMap glb, lub) = W.split (i2w k) (WordMap nonneg)
+                  in (IntMap (WordMap (W.binL glb (W.flipBounds neg))), IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -679,10 +679,10 @@ split k m
 -- > splitLookup 6 (fromList [(5,"a"), (3,"b")]) == (fromList [(3,"b"), (5,"a")], Nothing, empty)
 splitLookup :: Key -> IntMap a -> (IntMap a, Maybe a, IntMap a)
 splitLookup k m
-    | k < 0 = let (glb, eq, lub) = W.splitLookup (i2w k) neg
-              in (IntMap glb, eq, IntMap (W.binL nonneg (W.flipBounds lub)))
-    | otherwise = let (glb, eq, lub) = W.splitLookup (i2w k) nonneg
-                  in (IntMap (W.binL glb (W.flipBounds neg)), eq, IntMap lub)
+    | k < 0 = let (glb, eq, WordMap lub) = W.splitLookup (i2w k) (WordMap neg)
+              in (IntMap glb, eq, IntMap (WordMap (W.binL nonneg (W.flipBounds lub))))
+    | otherwise = let (WordMap glb, eq, lub) = W.splitLookup (i2w k) (WordMap nonneg)
+                  in (IntMap (WordMap (W.binL glb (W.flipBounds neg))), eq, IntMap lub)
   where
     (neg, nonneg) = split0 m
 
@@ -706,11 +706,11 @@ splitLookup k m
 --  future without notice.
 {-# INLINE splitRoot #-}
 splitRoot :: IntMap a -> [IntMap a]
-splitRoot (IntMap Empty) = []
-splitRoot m@(IntMap (NonEmpty _ _ Tip)) = [m]
-splitRoot (IntMap (NonEmpty min minV (Bin max maxV l r)))
-    | w2i (xor min max) < 0 = [IntMap (W.flipBounds (NonEmpty max maxV r)), IntMap (NonEmpty min minV l)]
-    | otherwise = [IntMap (NonEmpty min minV l), IntMap (W.flipBounds (NonEmpty max maxV r))]
+splitRoot (IntMap (WordMap Empty)) = []
+splitRoot m@(IntMap (WordMap (NonEmpty _ _ Tip))) = [m]
+splitRoot (IntMap (WordMap (NonEmpty min minV (Bin max maxV l r))))
+    | w2i (xor min max) < 0 = [IntMap (WordMap (W.flipBounds (NonEmpty max maxV r))), IntMap (WordMap (NonEmpty min minV l))]
+    | otherwise = [IntMap (WordMap (NonEmpty min minV l)), IntMap (WordMap (W.flipBounds (NonEmpty max maxV r)))]
 
 -- | /O(n+m)/. Is this a submap?
 -- Defined as (@'isSubmapOf' = 'isSubmapOfBy' (==)@).
@@ -762,9 +762,9 @@ isProperSubmapOfBy p (IntMap m1) (IntMap m2) = W.isProperSubmapOfBy p m1 m2
 
 -- | /O(1)/. The minimal key of the map.
 findMin :: IntMap a -> (Key, a)
-findMin (IntMap Empty) = error "findMin: empty map has no minimal element"
-findMin (IntMap (NonEmpty min minV Tip)) = (w2i min, minV)
-findMin (IntMap (NonEmpty min minV (Bin max maxV _ r)))
+findMin (IntMap (WordMap Empty)) = error "findMin: empty map has no minimal element"
+findMin (IntMap (WordMap (NonEmpty min minV Tip))) = (w2i min, minV)
+findMin (IntMap (WordMap (NonEmpty min minV (Bin max maxV _ r))))
     | w2i (xor min max) < 0 = case r of
         Tip -> (w2i max, maxV)
         Bin min' minV' _ _ -> (w2i min', minV')
@@ -772,9 +772,9 @@ findMin (IntMap (NonEmpty min minV (Bin max maxV _ r)))
 
 -- | /O(1)/. The maximal key of the map.
 findMax :: IntMap a -> (Key, a)
-findMax (IntMap Empty) = error "findMax: empty map has no maximal element"
-findMax (IntMap (NonEmpty min minV Tip)) = (w2i min, minV)
-findMax (IntMap (NonEmpty min minV (Bin max maxV l _)))
+findMax (IntMap (WordMap Empty)) = error "findMax: empty map has no maximal element"
+findMax (IntMap (WordMap (NonEmpty min minV Tip))) = (w2i min, minV)
+findMax (IntMap (WordMap (NonEmpty min minV (Bin max maxV l _))))
     | w2i (xor min max) < 0 = case l of
         Tip -> (w2i min, minV)
         Bin max' maxV' _ _ -> (w2i max', maxV')
@@ -785,7 +785,7 @@ findMax (IntMap (NonEmpty min minV (Bin max maxV l _)))
 -- Note that this is a change of behaviour for consistency with 'Data.Map.Map' &#8211;
 -- versions prior to 0.5 threw an error if the 'IntMap' was already empty.
 deleteMin :: IntMap a -> IntMap a
-deleteMin (IntMap Empty) = IntMap Empty
+deleteMin (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 deleteMin m = delete (fst (findMin m)) m
 
 -- | /O(min(n,W))/. Delete the maximal key. Returns an empty map if the map is empty.
@@ -793,7 +793,7 @@ deleteMin m = delete (fst (findMin m)) m
 -- Note that this is a change of behaviour for consistency with 'Data.Map.Map' &#8211;
 -- versions prior to 0.5 threw an error if the 'IntMap' was already empty.
 deleteMax :: IntMap a -> IntMap a
-deleteMax (IntMap Empty) = IntMap Empty
+deleteMax (IntMap (WordMap Empty)) = IntMap (WordMap Empty)
 deleteMax m = delete (fst (findMax m)) m
 
 -- | /O(min(n,W))/. Delete and find the minimal element.
@@ -809,14 +809,14 @@ deleteFindMax m = let (k, a) = findMax m
 -- | /O(min(n,W))/. Retrieves the minimal key of the map, and the map
 -- stripped of that element, or 'Nothing' if passed an empty map.
 minView :: IntMap a -> Maybe (a, IntMap a)
-minView (IntMap Empty) = Nothing
+minView (IntMap (WordMap Empty)) = Nothing
 minView m = let (k, a) = findMin m
             in Just (a, delete k m)
 
 -- | /O(min(n,W))/. Retrieves the maximal key of the map, and the map
 -- stripped of that element, or 'Nothing' if passed an empty map.
 maxView :: IntMap a -> Maybe (a, IntMap a)
-maxView (IntMap Empty) = Nothing
+maxView (IntMap (WordMap Empty)) = Nothing
 maxView m = let (k, a) = findMax m
             in Just (a, delete k m)
 
@@ -826,7 +826,7 @@ maxView m = let (k, a) = findMax m
 -- > minViewWithKey (fromList [(5,"a"), (3,"b")]) == Just ((3,"b"), singleton 5 "a")
 -- > minViewWithKey empty == Nothing
 minViewWithKey :: IntMap a -> Maybe ((Key, a), IntMap a)
-minViewWithKey (IntMap Empty) = Nothing
+minViewWithKey (IntMap (WordMap Empty)) = Nothing
 minViewWithKey m = let (k, a) = findMin m
                    in Just ((k, a), delete k m)
 
@@ -836,7 +836,7 @@ minViewWithKey m = let (k, a) = findMin m
 -- > maxViewWithKey (fromList [(5,"a"), (3,"b")]) == Just ((5,"a"), singleton 3 "b")
 -- > maxViewWithKey empty == Nothing
 maxViewWithKey :: IntMap a -> Maybe ((Key, a), IntMap a)
-maxViewWithKey (IntMap Empty) = Nothing
+maxViewWithKey (IntMap (WordMap Empty)) = Nothing
 maxViewWithKey m = let (k, a) = findMax m
                    in Just ((k, a), delete k m)
 
@@ -859,12 +859,12 @@ w2i = fromIntegral
 
 -- | /O(1)/. Split a map into its negative and nonnegative parts. For internal use only.
 {-# INLINE split0 #-}
-split0 :: IntMap a -> (WordMap a, WordMap a)
-split0 (IntMap Empty) = (Empty, Empty)
-split0 (IntMap m@(NonEmpty min _ Tip))
+split0 :: IntMap a -> (WordMap_ a, WordMap_ a)
+split0 (IntMap (WordMap Empty)) = (Empty, Empty)
+split0 (IntMap (WordMap m@(NonEmpty min _ Tip)))
     | w2i min < 0 = (m, Empty)
     | otherwise = (Empty, m)
-split0 (IntMap m@(NonEmpty min minV (Bin max maxV l r)))
+split0 (IntMap (WordMap m@(NonEmpty min minV (Bin max maxV l r))))
     | w2i (xor min max) < 0 = (W.flipBounds (NonEmpty max maxV r), NonEmpty min minV l)
     | w2i max < 0 = (m, Empty)
     | otherwise = (Empty, m)
