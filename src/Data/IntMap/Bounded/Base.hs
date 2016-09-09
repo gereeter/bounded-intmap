@@ -859,7 +859,7 @@ w2i = fromIntegral
 
 -- | /O(1)/. Split a map into its negative and nonnegative parts. For internal use only.
 {-# INLINE split0 #-}
-split0 :: IntMap a -> (WordMap_ a, WordMap_ a)
+split0 :: IntMap a -> (WordMap_ W.L a, WordMap_ W.L a)
 split0 (IntMap (WordMap Empty)) = (Empty, Empty)
 split0 (IntMap (WordMap m@(NonEmpty min _ Tip)))
     | w2i min < 0 = (m, Empty)

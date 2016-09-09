@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
 
 -- TODO: Add some comments describing how this implementation works.
 
@@ -846,8 +846,8 @@ differenceWithKey combine = start
             EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (loop r1 r2)
                | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (loop r1 r2)
                | otherwise -> case combine min1 minV1 minV2 of
-                    Nothing -> binR (goLFused min1 r1 r2) (loop r1 r2) -- we choose min1 arbitrarily, as min1 == min2
-                    Just minV1' -> binR (NonEmpty min1 minV1' (goLFusedKeep min1 r1 r2)) (loop r1 r2)
+                    Nothing -> binR (goLFused min1 l1 l2) (loop r1 r2) -- we choose min1 arbitrarily, as min1 == min2
+                    Just minV1' -> binR (NonEmpty min1 minV1' (goLFusedKeep min1 l1 l2)) (loop r1 r2)
             GT -> binR (NonEmpty min1 minV1 l1) (loop r1 n2)
     
     goRFusedKeep max = loop
@@ -861,10 +861,10 @@ differenceWithKey combine = start
                     Empty -> loop r1 r2
                     NonEmpty min' minV' l' -> Bin min' minV' l' (loop r1 r2)
                | otherwise -> case combine min1 minV1 minV2 of -- we choose min1 arbitrarily, as min1 == min2
-                    Nothing -> case goLFused min1 r1 r2 of
+                    Nothing -> case goLFused min1 l1 l2 of
                         Empty -> loop r1 r2
                         NonEmpty min' minV' l' -> Bin min' minV' l' (loop r1 r2)
-                    Just minV1' -> Bin min1 minV1' (goLFusedKeep min1 r1 r2) (loop r1 r2)
+                    Just minV1' -> Bin min1 minV1' (goLFusedKeep min1 l1 l2) (loop r1 r2)
             GT -> Bin min1 minV1 l1 (loop r1 n2)
     
     goLookupL k v !_ Tip = NonEmpty k v Tip
@@ -1049,12 +1049,13 @@ map = fmap
 --
 -- > let f key x = (show key) ++ ":" ++ x
 -- > mapWithKey f (fromList [(5,"a"), (3,"b")]) == fromList [(3, "3:b"), (5, "5:a")]
-mapWithKey :: (Key -> a -> b) -> WordMap a -> WordMap b
+mapWithKey :: forall a b. (Key -> a -> b) -> WordMap a -> WordMap b
 mapWithKey f = start
   where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
     
+    go :: Node t a -> Node t b
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 

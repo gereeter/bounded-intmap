@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, EmptyDataDecls #-}
 
 -- TODO: Add some comments describing how this implementation works.
 
@@ -22,9 +22,12 @@ import Prelude hiding (foldr, foldl, lookup, null, map, min, max)
 
 type Key = Word
 
-newtype WordMap a = WordMap (WordMap_ a) deriving (Eq)
-data WordMap_ a = NonEmpty {-# UNPACK #-} !Key a !(Node a) | Empty deriving (Eq)
-data Node a = Bin {-# UNPACK #-} !Key a !(Node a) !(Node a) | Tip deriving (Eq, Show)
+data L
+data R
+
+newtype WordMap a = WordMap (WordMap_ L a) deriving (Eq)
+data WordMap_ t a = NonEmpty {-# UNPACK #-} !Key a !(Node t a) | Empty deriving (Eq)
+data Node t a = Bin {-# UNPACK #-} !Key a !(Node L a) !(Node R a) | Tip deriving (Eq, Show)
 
 instance Show a => Show (WordMap a) where
     show m = "fromList " ++ show (toList m)
@@ -32,11 +35,11 @@ instance Show a => Show (WordMap a) where
 instance Functor WordMap where
     fmap f (WordMap m) = WordMap (fmap f m)
 
-instance Functor WordMap_ where
+instance Functor (WordMap_ t) where
     fmap _ Empty = Empty
     fmap f (NonEmpty min minV node) = NonEmpty min (f minV) (fmap f node)
 
-instance Functor Node where
+instance Functor (Node t) where
     fmap _ Tip = Tip
     fmap f (Bin k v l r) = Bin k (f v) (fmap f l) (fmap f r)
 
@@ -77,7 +80,7 @@ instance NFData a => NFData (WordMap a) where
     rnf (WordMap Empty) = ()
     rnf (WordMap (NonEmpty _ v n)) = rnf v `seq` rnf n
 
-instance NFData a => NFData (Node a) where
+instance NFData a => NFData (Node t a) where
     rnf Tip = ()
     rnf (Bin _ v l r) = rnf v `seq` rnf l `seq` rnf r
 
@@ -109,6 +112,7 @@ null _ = False
 size :: WordMap a -> Int
 size (WordMap Empty) = 0
 size (WordMap (NonEmpty _ _ node)) = sizeNode node where
+    sizeNode :: Node t a -> Int
     sizeNode Tip = 1
     sizeNode (Bin _ _ l r) = sizeNode l + sizeNode r
 
@@ -397,7 +401,7 @@ delete k = k `seq` start
 -- | Without this specialized type (I was just using a tuple), GHC's
 -- CPR correctly unboxed the tuple, but it couldn't unbox the returned
 -- Key, leading to lots of inefficiency (3x slower than stock Data.WordMap)
-data DeleteResult a = DR {-# UNPACK #-} !Key a !(Node a)
+data DeleteResult t a = DR {-# UNPACK #-} !Key a !(Node t a)
 
 -- | /O(n+m)/. The (left-biased) union of two maps.
 -- It prefers the first map when duplicate keys are encountered,
@@ -675,7 +679,7 @@ difference = start
             LT -> loop n1 r2
             EQ | min1 < min2 -> binR (NonEmpty min1 minV1 (goL2 min1 l1 min2 l2)) (loop r1 r2)
                | min1 > min2 -> binR (goL1 minV1 min1 l1 min2 l2) (loop r1 r2)
-               | otherwise -> binR (goLFused min1 r1 r2) (loop r1 r2) -- we choose min1 arbitrarily, as min1 == min2
+               | otherwise -> binR (goLFused min1 l1 l2) (loop r1 r2) -- we choose min1 arbitrarily, as min1 == min2
             GT -> binR (NonEmpty min1 minV1 l1) (loop r1 n2)
     
     goLookupL k v !_ Tip = NonEmpty k v Tip
@@ -1569,6 +1573,7 @@ showTree :: Show a => WordMap a -> String
 showTree = unlines . aux where
     aux (WordMap Empty) = []
     aux (WordMap (NonEmpty min minV node)) = (show min ++ " " ++ show minV) : auxNode False node
+    auxNode :: Show a => Bool -> Node t a -> [String]
     auxNode _ Tip = ["+-."]
     auxNode lined (Bin bound val l r) = ["+--" ++ show bound ++ " " ++ show val, prefix : "  |"] ++ fmap indent (auxNode True l) ++ [prefix : "  |"] ++ fmap indent (auxNode False r)
       where
@@ -1599,6 +1604,7 @@ valid = start
         && goL min l
         && goR max r
     
+    allKeys :: (Key -> Bool) -> Node t a -> Bool
     allKeys _ Tip = True
     allKeys p (Bin b _ l r) = p b && allKeys p l && allKeys p r
 
@@ -1617,32 +1623,34 @@ compareMSB x y = case compare x y of
     _ -> EQ
 
 {-# INLINE binL #-}
-binL :: WordMap_ a -> WordMap_ a -> WordMap_ a
+binL :: WordMap_ L a -> WordMap_ R a -> WordMap_ L a
 binL Empty r = flipBounds r
 binL l Empty = l
 binL (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty min minV (Bin max maxV l r)
 
 {-# INLINE binR #-}
-binR :: WordMap_ a -> WordMap_ a -> WordMap_ a
+binR :: WordMap_ L a -> WordMap_ R a -> WordMap_ R a
 binR Empty r = r
 binR l Empty = flipBounds l
 binR (NonEmpty min minV l) (NonEmpty max maxV r) = NonEmpty max maxV (Bin min minV l r)
 
+-- FIXME: better type
 {-# INLINE flipBounds #-}
-flipBounds :: WordMap_ a -> WordMap_ a
+flipBounds :: WordMap_ t a -> WordMap_ t' a
 flipBounds Empty = Empty
-flipBounds n@(NonEmpty _ _ Tip) = n
+flipBounds (NonEmpty b v Tip) = NonEmpty b v Tip
 flipBounds (NonEmpty b1 v1 (Bin b2 v2 l r)) = NonEmpty b2 v2 (Bin b1 v1 l r)
 
+-- FIXME: better type
 {-# INLINE flipBoundsDR #-}
-flipBoundsDR :: DeleteResult a -> DeleteResult a
-flipBoundsDR n@(DR _ _ Tip) = n
+flipBoundsDR :: DeleteResult t a -> DeleteResult t' a
+flipBoundsDR (DR b v Tip) = DR b v Tip
 flipBoundsDR (DR b1 v1 (Bin b2 v2 l r)) = DR b2 v2 (Bin b1 v1 l r)
 
 -- | Insert a key/value pair to a left node where the key is smaller than
 -- any present in that node. Requires the xor of the inserted key and the
 -- key immediately prior to it (the minimum bound of the node).
-insertMinL :: Word -> Key -> a -> Node a -> Node a
+insertMinL :: Word -> Key -> a -> Node L a -> Node L a
 insertMinL !_ !min minV Tip = Bin min minV Tip Tip
 insertMinL !xorCache !min minV (Bin max maxV l r)
     | xor min max < xorCache = Bin max maxV Tip (Bin min minV l r)
@@ -1651,7 +1659,7 @@ insertMinL !xorCache !min minV (Bin max maxV l r)
 -- | Insert a key/value pair to a right node where the key is greater than
 -- any present in that node. Requires the xor of the inserted key and the
 -- key immediately following it (the maximum bound of the node).
-insertMaxR :: Word -> Key -> a -> Node a -> Node a
+insertMaxR :: Word -> Key -> a -> Node R a -> Node R a
 insertMaxR !_ !max maxV Tip = Bin max maxV Tip Tip
 insertMaxR !xorCache !max maxV (Bin min minV l r)
     | xor min max < xorCache = Bin min minV (Bin max maxV l r) Tip
@@ -1659,7 +1667,7 @@ insertMaxR !xorCache !max maxV (Bin min minV l r)
 
 -- | Delete the minimum key/value pair from an unpacked left node, returning
 -- a new left node in a DeleteResult.
-deleteMinL :: Key -> a -> Node a -> Node a -> DeleteResult a
+deleteMinL :: Key -> a -> Node L a -> Node R a -> DeleteResult L a
 deleteMinL !max maxV Tip Tip = DR max maxV Tip
 deleteMinL !max maxV Tip (Bin min minV l r) = DR min minV (Bin max maxV l r)
 deleteMinL !max maxV (Bin innerMax innerMaxV innerL innerR) r =
@@ -1668,7 +1676,7 @@ deleteMinL !max maxV (Bin innerMax innerMaxV innerL innerR) r =
 
 -- | Delete the maximum key/value pair from an unpacked right node, returning
 -- a new right node in a DeleteResult.
-deleteMaxR :: Key -> a -> Node a -> Node a -> DeleteResult a
+deleteMaxR :: Key -> a -> Node L a -> Node R a -> DeleteResult R a
 deleteMaxR !min minV Tip Tip = DR min minV Tip
 deleteMaxR !min minV (Bin max maxV l r) Tip = DR max maxV (Bin min minV l r)
 deleteMaxR !min minV l (Bin innerMin innerMinV innerL innerR) =
@@ -1676,26 +1684,26 @@ deleteMaxR !min minV l (Bin innerMin innerMinV innerL innerR) =
     in  DR max maxV (Bin min minV l inner)
 
 -- | Combine two disjoint nodes into a new left node. This is not cheap.
-extractBinL :: Node a -> Node a -> Node a
+extractBinL :: Node L a -> Node R a -> Node L a
 extractBinL l Tip = l
 extractBinL l (Bin min minV innerL innerR) =
     let DR max maxV r = deleteMaxR min minV innerL innerR
     in Bin max maxV l r
 
 -- | Combine two disjoint nodes into a new right node. This is not cheap.
-extractBinR :: Node a -> Node a -> Node a
+extractBinR :: Node L a -> Node R a -> Node R a
 extractBinR Tip r = r
 extractBinR (Bin max maxV innerL innerR) r =
     let DR min minV l = deleteMinL max maxV innerL innerR
     in Bin min minV l r
 
-nodeToMapL :: Node a -> WordMap_ a
+nodeToMapL :: Node L a -> WordMap_ L a
 nodeToMapL Tip = Empty
 nodeToMapL (Bin max maxV innerL innerR) =
     let DR min minV l = deleteMinL max maxV innerL innerR
     in NonEmpty min minV l
 
-nodeToMapR :: Node a -> WordMap_ a
+nodeToMapR :: Node R a -> WordMap_ R a
 nodeToMapR Tip = Empty
 nodeToMapR (Bin min minV innerL innerR) =
     let DR max maxV r = deleteMaxR min minV innerL innerR
@@ -1703,7 +1711,7 @@ nodeToMapR (Bin min minV innerL innerR) =
 
 -- | Delete a key from a left node. Takes the xor of the deleted key and
 -- the minimum bound of that node.
-deleteL :: Key -> Word -> Node a -> Node a
+deleteL :: Key -> Word -> Node L a -> Node L a
 deleteL !_ !_ Tip = Tip
 deleteL !k !xorCache n@(Bin max maxV l r)
     | k < max = if xorCache < xorCacheMax
@@ -1715,7 +1723,7 @@ deleteL !k !xorCache n@(Bin max maxV l r)
 
 -- | Delete a key from a right node. Takes the xor of the deleted key and
 -- the maximum bound of that node.
-deleteR :: Key -> Word -> Node a -> Node a
+deleteR :: Key -> Word -> Node R a -> Node R a
 deleteR !_ !_ Tip = Tip
 deleteR !k !xorCache n@(Bin min minV l r)
     | k > min = if xorCache < xorCacheMin

@@ -10,8 +10,8 @@ import Prelude hiding (min, max)
 
 data WhenMissing a b = WhenMissing {
     missingSingle :: Key -> a -> Maybe b,
-    missingLeft :: Node a -> Node b,
-    missingRight :: Node a -> Node b,
+    missingLeft :: Node L a -> Node L b,
+    missingRight :: Node R a -> Node R b,
     missingAll :: WordMap a -> WordMap b
 }
 

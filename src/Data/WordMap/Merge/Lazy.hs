@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
 
 module Data.WordMap.Merge.Lazy (
     -- ** Simple merge tactic types
@@ -30,11 +30,12 @@ import Data.Bits (xor)
 
 import Prelude hiding (min, max)
 
-mapMissing :: (Key -> a -> b) -> WhenMissing a b
+mapMissing :: forall a b. (Key -> a -> b) -> WhenMissing a b
 mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
 
+    go :: Node t a -> Node t b
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
