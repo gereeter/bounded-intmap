@@ -9,6 +9,11 @@ import Data.Functor.Identity (Identity, runIdentity)
 
 import Prelude hiding (min, max)
 
+-- | A tactic for dealing with keys present in one map but not the other in
+-- 'merge' or 'mergeA'.
+--
+-- A tactic of type @ WhenMissing f a c @ is an abstract representation
+-- of a function of type @ Key -> a -> f (Maybe c) @.
 data WhenMissing f a b = WhenMissing {
     missingSingle :: Key -> a -> Maybe b,
     missingLeft :: Node L a -> Node L b,
@@ -16,16 +21,50 @@ data WhenMissing f a b = WhenMissing {
     missingAll :: WordMap a -> f (WordMap b)
 }
 
+-- | A tactic for dealing with keys present in one map but not the other in
+-- 'merge'.
+--
+-- A tactic of type @ SimpleWhenMissing a c @ is an abstract representation
+-- of a function of type @ Key -> a -> Maybe c @.
 type SimpleWhenMissing = WhenMissing Identity
 
+-- | Drop all the entries whose keys are missing from the other
+-- map.
+--
+-- @
+-- dropMissing :: SimpleWhenMissing a b
+-- @
+--
+-- prop> dropMissing = mapMaybeMissing (\_ _ -> Nothing)
+--
+-- but @dropMissing@ is much faster.
 {-# INLINE dropMissing #-}
 dropMissing :: Applicative f => WhenMissing f a b
 dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (pure (WordMap Empty)))
 
+-- | Preserve, unchanged, the entries whose keys are missing from
+-- the other map.
+--
+-- @
+-- preserveMissing :: SimpleWhenMissing a a
+-- @
+--
+-- prop> preserveMissing = Merge.Lazy.mapMaybeMissing (\_ x -> Just x)
+--
+-- but @preserveMissing@ is much faster.
 {-# INLINE preserveMissing #-}
 preserveMissing :: Applicative f => WhenMissing f a a
 preserveMissing = WhenMissing (\_ v -> Just v) id id pure
 
+-- | Filter the entries whose keys are missing from the other map.
+--
+-- @
+-- filterMissing :: (Key -> x -> Bool) -> SimpleWhenMissing a a
+-- @
+--
+-- prop> filterMissing f = Merge.Lazy.mapMaybeMissing $ \k x -> guard (f k x) *> Just x
+--
+-- but this should be a little faster.
 filterMissing :: Applicative f => (Key -> a -> Bool) -> WhenMissing f a a
 filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep (pure . start) where
     start (WordMap Empty) = WordMap Empty
@@ -65,10 +104,19 @@ filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKee
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goLKeep l) r')
         | otherwise = binR (goL l) (goR r)
 
-data WhenMatched f a b c = WhenMatched {
+-- | A tactic for dealing with keys present in both
+-- maps in 'merge' or 'mergeA'.
+--
+-- A tactic of type @ WhenMatched f a b c @ is an abstract representation
+-- of a function of type @ Key -> a -> b -> f (Maybe c) @.
+newtype WhenMatched f a b c = WhenMatched {
     matchedSingle :: Key -> a -> b -> f (Maybe c)
 }
 
+-- | A tactic for dealing with keys present in both maps in 'merge'.
+--
+-- A tactic of type @ SimpleWhenMatched a b c @ is an abstract representation
+-- of a function of type @ Key -> a -> b -> Maybe c @.
 type SimpleWhenMatched = WhenMatched Identity
 
 unionM :: WordMap a -> WordMap a -> WordMap a
@@ -80,6 +128,74 @@ differenceM = merge preserveMissing dropMissing (WhenMatched (\_ _ _ -> pure Not
 intersectionM :: WordMap a -> WordMap b -> WordMap a
 intersectionM = merge dropMissing dropMissing (WhenMatched (\_ a _ -> pure (Just a)))
 
+-- | Merge two maps.
+--
+-- @merge@ takes two 'WhenMissing' tactics, a 'WhenMatched'
+-- tactic and two maps. It uses the tactics to merge the maps.
+-- Its behavior is best understood via its fundamental tactics,
+-- 'mapMaybeMissing' and 'zipWithMaybeMatched'.
+--
+-- Consider
+--
+-- @
+-- merge (mapMaybeMissing g1)
+--              (mapMaybeMissing g2)
+--              (zipWithMaybeMatched f)
+--              m1 m2
+-- @
+--
+-- Take, for example,
+--
+-- @
+-- m1 = [(0, 'a'), (1, 'b'), (3,'c'), (4, 'd')]
+-- m2 = [(1, "one"), (2, "two"), (4, "three")]
+-- @
+--
+-- @merge@ will first ''align'' these maps by key:
+--
+-- @
+-- m1 = [(0, 'a'), (1, 'b'),               (3,'c'), (4, 'd')]
+-- m2 =           [(1, "one"), (2, "two"),          (4, "three")]
+-- @
+--
+-- It will then pass the individual entries and pairs of entries
+-- to @g1@, @g2@, or @f@ as appropriate:
+--
+-- @
+-- maybes = [g1 0 'a', f 1 'b' "one", g2 2 "two", g1 3 'c', f 4 'd' "three"]
+-- @
+--
+-- This produces a 'Maybe' for each key:
+--
+-- @
+-- keys =     0        1          2           3        4
+-- results = [Nothing, Just True, Just False, Nothing, Just True]
+-- @
+--
+-- Finally, the @Just@ results are collected into a map:
+--
+-- @
+-- return value = [(1, True), (2, False), (4, True)]
+-- @
+--
+-- The other tactics below are optimizations or simplifications of
+-- 'mapMaybeMissing' for special cases. Most importantly,
+--
+-- * 'dropMissing' drops all the keys.
+-- * 'preserveMissing' leaves all the entries alone.
+--
+-- When 'merge' is given three arguments, it is inlined at the call
+-- site. To prevent excessive inlining, you should typically use 'merge'
+-- to define your custom combining functions.
+--
+--
+-- Examples:
+--
+-- prop> unionWithKey f = merge preserveMissing preserveMissing (zipWithMatched f)
+-- prop> intersectionWithKey f = merge dropMissing dropMissing (zipWithMatched f)
+-- prop> differenceWith f = merge preserveMissing dropMissing f
+-- prop> symmetricDifference = merge preserveMissing preserveMissing (zipWithMaybeMatched (\_ _ _ -> Nothing))
+-- prop> mapEachPiece f g h = merge (mapMissing f) (mapMissing g) (zipWithMatched h)
 {-# INLINE merge #-}
 merge :: SimpleWhenMissing a c -> SimpleWhenMissing b c -> SimpleWhenMatched a b c -> WordMap a -> WordMap b -> WordMap c
 merge miss1 miss2 match = start where
