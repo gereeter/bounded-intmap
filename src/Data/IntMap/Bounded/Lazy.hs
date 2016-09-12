@@ -66,6 +66,9 @@ module Data.IntMap.Bounded.Lazy (
     , intersectionWith
     , intersectionWithM
     , intersectionWithKey
+
+    -- ** Deprecated, unsafe general combining function
+    , mergeWithKey
     
     -- * Traversal
     -- ** Map
@@ -164,6 +167,7 @@ import Data.IntMap.Bounded.Base
 
 import Data.WordMap.Base (WordMap(..), WordMap_(..), Node(..))
 import qualified Data.WordMap.Lazy as W
+import qualified Data.WordMap.Merge.Lazy as WM
 
 import qualified Data.IntSet (IntSet, toList)
 
@@ -373,6 +377,47 @@ intersectionWithKey f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithKey (f
 
 intersectionWithM :: (Key -> a -> b -> c) -> IntMap a -> IntMap b -> IntMap c
 intersectionWithM f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithM (f . w2i) m1 m2)
+
+-- | /O(n+m)/. An unsafe general combining function.
+--
+-- WARNING: This function can produce corrupt maps and its results
+-- may depend on the internal structures of its inputs. Users should
+-- prefer 'merge' or 'mergeA'. This function is also significantly slower
+-- than 'merge'.
+--
+-- When 'mergeWithKey' is given three arguments, it is inlined to the call
+-- site. You should therefore use 'mergeWithKey' only to define custom
+-- combining functions. For example, you could define 'unionWithKey',
+-- 'differenceWithKey' and 'intersectionWithKey' as
+--
+-- > myUnionWithKey f m1 m2 = mergeWithKey (\k x1 x2 -> Just (f k x1 x2)) id id m1 m2
+-- > myDifferenceWithKey f m1 m2 = mergeWithKey f id (const empty) m1 m2
+-- > myIntersectionWithKey f m1 m2 = mergeWithKey (\k x1 x2 -> Just (f k x1 x2)) (const empty) (const empty) m1 m2
+--
+-- When calling @'mergeWithKey' combine only1 only2@, a function combining two
+-- 'IntMap's is created, such that
+--
+-- * if a key is present in both maps, it is passed with both corresponding
+--   values to the @combine@ function. Depending on the result, the key is either
+--   present in the result with specified value, or is left out;
+--
+-- * a nonempty subtree present only in the first map is passed to @only1@ and
+--   the output is added to the result;
+--
+-- * a nonempty subtree present only in the second map is passed to @only2@ and
+--   the output is added to the result.
+--
+-- The @only1@ and @only2@ methods /must return a map with a subset (possibly empty) of the keys of the given map/.
+-- The values can be modified arbitrarily. Most common variants of @only1@ and
+-- @only2@ are 'id' and @'const' 'empty'@, but for example @'map' f@,
+-- @'filterWithKey' f@, or @'mapMaybeWithKey' f@ could be used for any @f@.
+mergeWithKey :: (Key -> a -> b -> c) -> (IntMap a -> IntMap c) -> (IntMap b -> IntMap c) -> IntMap a -> IntMap b -> IntMap c
+mergeWithKey matched miss1 miss2 = start where
+    start (IntMap m1) (IntMap m2) = IntMap (WM.merge (WM.mapMaybeMissing (single miss1)) (WM.mapMaybeMissing (single miss2)) (WM.zipWithMatched (matched . w2i)) m1 m2)
+
+    single miss k v = case miss (IntMap (WordMap (NonEmpty k v Tip))) of
+        IntMap (WordMap Empty) -> Nothing
+        IntMap (WordMap (NonEmpty _ v' _)) -> Just v'
 
 -- | /O(n)/. Map a function over all values in the map.
 --

@@ -16,6 +16,7 @@ library
                         Data.WordMap.Strict,
                         Data.WordMap.Merge.Base,
                         Data.WordMap.Merge.Lazy,
+                        Data.WordMap.Merge.Strict,
                      Data.WordSet,
                         Data.WordSet.Internal,
                      Data.IntMap.Bounded,

@@ -23,6 +23,45 @@ dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (Word
 preserveMissing :: WhenMissing a a
 preserveMissing = WhenMissing (\_ v -> Just v) id id id
 
+filterMissing :: (Key -> a -> Bool) -> WhenMissing a a
+filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep start where
+    start (WordMap Empty) = WordMap Empty
+    start (WordMap (NonEmpty min minV root))
+        | p min minV = WordMap (NonEmpty min minV (goLKeep root))
+        | otherwise = WordMap (goL root)
+
+    goLKeep Tip = Tip
+    goLKeep (Bin max maxV l r)
+        | p max maxV = Bin max maxV (goLKeep l) (goRKeep r)
+        | otherwise = case goR r of
+            Empty -> goLKeep l
+            NonEmpty max' maxV' r' -> Bin max' maxV' (goLKeep l) r'
+
+    goRKeep Tip = Tip
+    goRKeep (Bin min minV l r)
+        | p min minV = Bin min minV (goLKeep l) (goRKeep r)
+        | otherwise = case goL l of
+            Empty -> goRKeep r
+            NonEmpty min' minV' l' -> Bin min' minV' l' (goRKeep r)
+
+    goL Tip = Empty
+    goL (Bin max maxV l r)
+        | p max maxV = case goL l of
+            Empty -> case goRKeep r of
+                Tip -> NonEmpty max maxV Tip
+                Bin minI minVI lI rI -> NonEmpty minI minVI (Bin max maxV lI rI)
+            NonEmpty min minV l' -> NonEmpty min minV (Bin max maxV l' (goRKeep r))
+        | otherwise = binL (goL l) (goR r)
+
+    goR Tip = Empty
+    goR (Bin min minV l r)
+        | p min minV = case goR r of
+            Empty -> case goLKeep l of
+                Tip -> NonEmpty min minV Tip
+                Bin maxI maxVI lI rI -> NonEmpty maxI maxVI (Bin min minV lI rI)
+            NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goLKeep l) r')
+        | otherwise = binR (goL l) (goR r)
+
 data WhenMatched a b c = WhenMatched {
     matchedSingle :: Key -> a -> b -> Maybe c
 }
