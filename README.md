@@ -101,7 +101,7 @@ Below is a listing of every function in stock `Data.IntMap`, along with the impl
 * `intersectionWithKey`. Raw. Note that it is still slower than stock `Data.IntMap` by up to (though not necessarily) 50%.
 
 #### Universal combining function
-* `mergeWithKey`. _Unimplemented_. Probably never will be implemented, at least in its current form, due to this being very implementation-specific.
+* `mergeWithKey`. Delegated, using `merge`. Much slower than stock `mergeWithKey` and always will be - this function is terrible and abstraction-breaking.
 
 ### Traversal
 #### Map
