@@ -29,7 +29,7 @@ import Data.WordMap.Merge.Base
 import Prelude hiding (min, max)
 
 mapMissing :: forall f a b. Applicative f => (Key -> a -> b) -> WhenMissing f a b
-mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
+mapMissing f = WhenMissing (\k v -> Just (f k v)) go go (pure . start) where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
 
@@ -38,7 +38,7 @@ mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
 mapMaybeMissing :: Applicative f => (Key -> a -> Maybe b) -> WhenMissing f a b
-mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
+mapMaybeMissing f = WhenMissing f goLKeep goRKeep (pure . start) where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = case f min minV of
         Just minV' -> WordMap (NonEmpty min minV' (goLKeep root))
@@ -78,7 +78,7 @@ mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
 
 {-# INLINE zipWithMaybeMatched #-}
 zipWithMaybeMatched :: Applicative f => (Key -> a -> b -> Maybe c) -> WhenMatched f a b c
-zipWithMaybeMatched = WhenMatched
+zipWithMaybeMatched f = WhenMatched (\k a b -> pure (f k a b))
 
 {-# INLINE zipWithMatched #-}
 zipWithMatched :: Applicative f => (Key -> a -> b -> c) -> WhenMatched f a b c

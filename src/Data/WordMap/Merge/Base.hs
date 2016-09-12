@@ -1,33 +1,33 @@
-{-# LANGUAGE BangPatterns, KindSignatures #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Data.WordMap.Merge.Base where
 
 import Data.WordMap.Base
 
 import Data.Bits (xor)
-import Data.Functor.Identity (Identity)
+import Data.Functor.Identity (Identity, runIdentity)
 
 import Prelude hiding (min, max)
 
-data WhenMissing (f :: * -> *) a b = WhenMissing {
+data WhenMissing f a b = WhenMissing {
     missingSingle :: Key -> a -> Maybe b,
     missingLeft :: Node L a -> Node L b,
     missingRight :: Node R a -> Node R b,
-    missingAll :: WordMap a -> WordMap b
+    missingAll :: WordMap a -> f (WordMap b)
 }
 
 type SimpleWhenMissing = WhenMissing Identity
 
 {-# INLINE dropMissing #-}
 dropMissing :: Applicative f => WhenMissing f a b
-dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (WordMap Empty))
+dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (pure (WordMap Empty)))
 
 {-# INLINE preserveMissing #-}
 preserveMissing :: Applicative f => WhenMissing f a a
-preserveMissing = WhenMissing (\_ v -> Just v) id id id
+preserveMissing = WhenMissing (\_ v -> Just v) id id pure
 
 filterMissing :: Applicative f => (Key -> a -> Bool) -> WhenMissing f a a
-filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep start where
+filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep (pure . start) where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root))
         | p min minV = WordMap (NonEmpty min minV (goLKeep root))
@@ -65,27 +65,27 @@ filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKee
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goLKeep l) r')
         | otherwise = binR (goL l) (goR r)
 
-data WhenMatched (f :: * -> *) a b c = WhenMatched {
-    matchedSingle :: Key -> a -> b -> Maybe c
+data WhenMatched f a b c = WhenMatched {
+    matchedSingle :: Key -> a -> b -> f (Maybe c)
 }
 
 type SimpleWhenMatched = WhenMatched Identity
 
 unionM :: WordMap a -> WordMap a -> WordMap a
-unionM = merge preserveMissing preserveMissing (WhenMatched (\_ a _ -> Just a))
+unionM = merge preserveMissing preserveMissing (WhenMatched (\_ a _ -> pure (Just a)))
 
 differenceM :: WordMap a -> WordMap b -> WordMap a
-differenceM = merge preserveMissing dropMissing (WhenMatched (\_ _ _ -> Nothing))
+differenceM = merge preserveMissing dropMissing (WhenMatched (\_ _ _ -> pure Nothing))
 
 intersectionM :: WordMap a -> WordMap b -> WordMap a
-intersectionM = merge dropMissing dropMissing (WhenMatched (\_ a _ -> Just a))
+intersectionM = merge dropMissing dropMissing (WhenMatched (\_ a _ -> pure (Just a)))
 
 {-# INLINE merge #-}
 merge :: SimpleWhenMissing a c -> SimpleWhenMissing b c -> SimpleWhenMatched a b c -> WordMap a -> WordMap b -> WordMap c
 merge miss1 miss2 match = start where
     start (WordMap Empty) (WordMap Empty) = WordMap Empty
-    start (WordMap Empty) !m2 = missingAll miss2 m2
-    start !m1 (WordMap Empty) = missingAll miss1 m1
+    start (WordMap Empty) !m2 = runIdentity (missingAll miss2 m2)
+    start !m1 (WordMap Empty) = runIdentity (missingAll miss1 m1)
     start (WordMap (NonEmpty min1 minV1 root1)) (WordMap (NonEmpty min2 minV2 root2))
         | min1 < min2 = case missingSingle miss1 min1 minV1 of
             Nothing -> WordMap (goL2 minV2 min1 root1 min2 root2)
@@ -93,7 +93,7 @@ merge miss1 miss2 match = start where
         | min1 > min2 = case missingSingle miss2 min2 minV2 of
             Nothing -> WordMap (goL1 minV1 min1 root1 min2 root2)
             Just minV' -> WordMap (NonEmpty min2 minV' (goL1Keep minV1 min1 root1 min2 root2))
-        | otherwise = case matchedSingle match min1 minV1 minV2 of
+        | otherwise = case runIdentity (matchedSingle match min1 minV1 minV2) of
             Nothing -> WordMap (goLFused min1 root1 root2)
             Just minV' -> WordMap (NonEmpty min1 minV' (goLFusedKeep min1 root1 root2))
     
@@ -120,7 +120,7 @@ merge miss1 miss2 match = start where
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
                Just maxV' -> Bin max2 maxV' l' (goR1Keep maxV1 max1 (Bin min1 minV1 l1 r1) max2 r2)
-           | otherwise -> case matchedSingle match max1 maxV1 maxV2 of
+           | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 (Bin min1 minV1 l1 r1) r2 of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
@@ -139,7 +139,7 @@ merge miss1 miss2 match = start where
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
                Just maxV' -> Bin max2 maxV' l' (goR1Keep maxV1 max1 r1 max2 r2)
-           | otherwise -> case matchedSingle match max1 maxV1 maxV2 of
+           | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 r1 r2 of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
@@ -175,7 +175,7 @@ merge miss1 miss2 match = start where
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
                Just maxV' -> Bin max2 maxV' l' (goR1Keep maxV1 max1 r1 max2 (Bin min2 minV2 l2 r2))
-           | otherwise -> case matchedSingle match max1 maxV1 maxV2 of
+           | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 r1 (Bin min2 minV2 l2 r2) of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
@@ -194,7 +194,7 @@ merge miss1 miss2 match = start where
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
                Just maxV' -> Bin max2 maxV' l' (goR1Keep maxV1 max1 r1 max2 r2)
-           | otherwise -> case matchedSingle match max1 maxV1 maxV2 of
+           | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 r1 r2 of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
@@ -222,7 +222,7 @@ merge miss1 miss2 match = start where
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
                Just maxV' -> Bin max1 maxV' l' (goR1Keep maxV1 max1 r1 max2 r2)
-           | otherwise -> case matchedSingle match max1 maxV1 maxV2 of
+           | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 r1 r2 of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
@@ -255,7 +255,7 @@ merge miss1 miss2 match = start where
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
                Just minV' -> Bin min2 minV' (goL1Keep minV1 min1 (Bin max1 maxV1 l1 r1) min2 l2) r'
-           | otherwise -> case matchedSingle match min1 minV1 minV2 of
+           | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 (Bin max1 maxV1 l1 r1) l2 of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
@@ -274,7 +274,7 @@ merge miss1 miss2 match = start where
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
                Just minV' -> Bin min2 minV' (goL1Keep minV1 min1 l1 min2 l2) r'
-           | otherwise -> case matchedSingle match min1 minV1 minV2 of
+           | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 l1 l2 of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
@@ -310,7 +310,7 @@ merge miss1 miss2 match = start where
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
                Just minV' -> Bin min2 minV' (goL1Keep minV1 min1 l1 min2 (Bin max2 maxV2 l2 r2)) r'
-           | otherwise -> case matchedSingle match min1 minV1 minV2 of
+           | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 l1 (Bin max2 maxV2 l2 r2) of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
@@ -329,7 +329,7 @@ merge miss1 miss2 match = start where
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
                Just minV' -> Bin min2 minV' (goL1Keep minV1 min1 l1 min2 l2) r'
-           | otherwise -> case matchedSingle match min1 minV1 minV2 of
+           | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 l1 l2 of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
@@ -357,7 +357,7 @@ merge miss1 miss2 match = start where
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
                Just minV' -> Bin min1 minV' (goL1Keep minV1 min1 l1 min2 l2) r'
-           | otherwise -> case matchedSingle match min1 minV1 minV2 of
+           | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 l1 l2 of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
@@ -386,7 +386,7 @@ merge miss1 miss2 match = start where
             Just v' -> if xor min max < xorCacheMax
                        then Bin k v' (missingLeft miss2 (Bin max maxV l r)) Tip
                        else Bin k v' (missingLeft miss2 l) (missingRight miss2 (insertMaxR xorCacheMax max maxV r))
-        | otherwise = case matchedSingle match max v maxV of
+        | otherwise = case runIdentity (matchedSingle match max v maxV) of
             Nothing -> extractBinL (missingLeft miss2 l) (missingRight miss2 r) -- TODO: do extractBin first?
             Just maxV' -> Bin max maxV' (missingLeft miss2 l) (missingRight miss2 r)
       where xorCacheMax = xor k max
@@ -403,7 +403,7 @@ merge miss1 miss2 match = start where
             Just v' -> if xor min max < xorCacheMax
                        then Bin k v' (missingLeft miss1 (Bin max maxV l r)) Tip
                        else Bin k v' (missingLeft miss1 l) (missingRight miss1 (insertMaxR xorCacheMax max maxV r))
-        | otherwise = case matchedSingle match max maxV v of
+        | otherwise = case runIdentity (matchedSingle match max maxV v) of
             Nothing -> extractBinL (missingLeft miss1 l) (missingRight miss1 r) -- TODO: do extractBin first?
             Just maxV' -> Bin max maxV' (missingLeft miss1 l) (missingRight miss1 r)
       where xorCacheMax = xor k max
@@ -420,7 +420,7 @@ merge miss1 miss2 match = start where
             Just v' -> if xor min max < xorCacheMin
                        then Bin k v' Tip (missingRight miss2 (Bin min minV l r))
                        else Bin k v' (missingLeft miss2 (insertMinL xorCacheMin min minV l)) (missingRight miss2 r)
-        | otherwise = case matchedSingle match min v minV of
+        | otherwise = case runIdentity (matchedSingle match min v minV) of
             Nothing -> extractBinR (missingLeft miss2 l) (missingRight miss2 r) -- TODO: do extractBin first?
             Just minV' -> Bin min minV' (missingLeft miss2 l) (missingRight miss2 r)
       where xorCacheMin = xor k min
@@ -437,7 +437,7 @@ merge miss1 miss2 match = start where
             Just v' -> if xor min max < xorCacheMin
                        then Bin k v' Tip (missingRight miss1 (Bin min minV l r))
                        else Bin k v' (missingLeft miss1 (insertMinL xorCacheMin min minV l)) (missingRight miss1 r)
-        | otherwise = case matchedSingle match min minV v of
+        | otherwise = case runIdentity (matchedSingle match min minV v) of
             Nothing -> extractBinR (missingLeft miss1 l) (missingRight miss1 r) -- TODO: do extractBin first?
             Just minV' -> Bin min minV' (missingLeft miss1 l) (missingRight miss1 r)
       where xorCacheMin = xor k min
