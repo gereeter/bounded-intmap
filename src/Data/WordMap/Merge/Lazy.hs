@@ -28,7 +28,7 @@ import Data.WordMap.Merge.Base
 
 import Prelude hiding (min, max)
 
-mapMissing :: forall a b. (Key -> a -> b) -> WhenMissing a b
+mapMissing :: forall f a b. Applicative f => (Key -> a -> b) -> WhenMissing f a b
 mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = WordMap (NonEmpty min (f min minV) (go root))
@@ -37,7 +37,7 @@ mapMissing f = WhenMissing (\k v -> Just (f k v)) go go start where
     go Tip = Tip
     go (Bin k v l r) = Bin k (f k v) (go l) (go r)
 
-mapMaybeMissing :: (Key -> a -> Maybe b) -> WhenMissing a b
+mapMaybeMissing :: Applicative f => (Key -> a -> Maybe b) -> WhenMissing f a b
 mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root)) = case f min minV of
@@ -77,11 +77,11 @@ mapMaybeMissing f = WhenMissing f goLKeep goRKeep start where
         Nothing -> binR (goL l) (goR r)
 
 {-# INLINE zipWithMaybeMatched #-}
-zipWithMaybeMatched :: (Key -> a -> b -> Maybe c) -> WhenMatched a b c
+zipWithMaybeMatched :: Applicative f => (Key -> a -> b -> Maybe c) -> WhenMatched f a b c
 zipWithMaybeMatched = WhenMatched
 
 {-# INLINE zipWithMatched #-}
-zipWithMatched :: (Key -> a -> b -> c) -> WhenMatched a b c
+zipWithMatched :: Applicative f => (Key -> a -> b -> c) -> WhenMatched f a b c
 zipWithMatched f = zipWithMaybeMatched (\k a b -> Just (f k a b))
 
 unionWithM :: (Key -> a -> a -> a) -> WordMap a -> WordMap a -> WordMap a

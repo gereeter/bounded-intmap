@@ -1,29 +1,32 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, KindSignatures #-}
 
 module Data.WordMap.Merge.Base where
 
 import Data.WordMap.Base
 
 import Data.Bits (xor)
+import Data.Functor.Identity (Identity)
 
 import Prelude hiding (min, max)
 
-data WhenMissing a b = WhenMissing {
+data WhenMissing (f :: * -> *) a b = WhenMissing {
     missingSingle :: Key -> a -> Maybe b,
     missingLeft :: Node L a -> Node L b,
     missingRight :: Node R a -> Node R b,
     missingAll :: WordMap a -> WordMap b
 }
 
+type SimpleWhenMissing = WhenMissing Identity
+
 {-# INLINE dropMissing #-}
-dropMissing :: WhenMissing a b
+dropMissing :: Applicative f => WhenMissing f a b
 dropMissing = WhenMissing (\_ _ -> Nothing) (const Tip) (const Tip) (const (WordMap Empty))
 
 {-# INLINE preserveMissing #-}
-preserveMissing :: WhenMissing a a
+preserveMissing :: Applicative f => WhenMissing f a a
 preserveMissing = WhenMissing (\_ v -> Just v) id id id
 
-filterMissing :: (Key -> a -> Bool) -> WhenMissing a a
+filterMissing :: Applicative f => (Key -> a -> Bool) -> WhenMissing f a a
 filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKeep goRKeep start where
     start (WordMap Empty) = WordMap Empty
     start (WordMap (NonEmpty min minV root))
@@ -62,9 +65,11 @@ filterMissing p = WhenMissing (\k v -> if p k v then Just v else Nothing) goLKee
             NonEmpty max maxV r' -> NonEmpty max maxV (Bin min minV (goLKeep l) r')
         | otherwise = binR (goL l) (goR r)
 
-data WhenMatched a b c = WhenMatched {
+data WhenMatched (f :: * -> *) a b c = WhenMatched {
     matchedSingle :: Key -> a -> b -> Maybe c
 }
+
+type SimpleWhenMatched = WhenMatched Identity
 
 unionM :: WordMap a -> WordMap a -> WordMap a
 unionM = merge preserveMissing preserveMissing (WhenMatched (\_ a _ -> Just a))
@@ -76,7 +81,7 @@ intersectionM :: WordMap a -> WordMap b -> WordMap a
 intersectionM = merge dropMissing dropMissing (WhenMatched (\_ a _ -> Just a))
 
 {-# INLINE merge #-}
-merge :: WhenMissing a c -> WhenMissing b c -> WhenMatched a b c -> WordMap a -> WordMap b -> WordMap c
+merge :: SimpleWhenMissing a c -> SimpleWhenMissing b c -> SimpleWhenMatched a b c -> WordMap a -> WordMap b -> WordMap c
 merge miss1 miss2 match = start where
     start (WordMap Empty) (WordMap Empty) = WordMap Empty
     start (WordMap Empty) !m2 = missingAll miss2 m2
