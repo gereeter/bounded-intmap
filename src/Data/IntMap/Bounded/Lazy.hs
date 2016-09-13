@@ -411,9 +411,9 @@ intersectionWithM f (IntMap m1) (IntMap m2) = IntMap (W.intersectionWithM (f . w
 -- The values can be modified arbitrarily. Most common variants of @only1@ and
 -- @only2@ are 'id' and @'const' 'empty'@, but for example @'map' f@,
 -- @'filterWithKey' f@, or @'mapMaybeWithKey' f@ could be used for any @f@.
-mergeWithKey :: (Key -> a -> b -> c) -> (IntMap a -> IntMap c) -> (IntMap b -> IntMap c) -> IntMap a -> IntMap b -> IntMap c
+mergeWithKey :: (Key -> a -> b -> Maybe c) -> (IntMap a -> IntMap c) -> (IntMap b -> IntMap c) -> IntMap a -> IntMap b -> IntMap c
 mergeWithKey matched miss1 miss2 = start where
-    start (IntMap m1) (IntMap m2) = IntMap (WM.merge (WM.mapMaybeMissing (single miss1)) (WM.mapMaybeMissing (single miss2)) (WM.zipWithMatched (matched . w2i)) m1 m2)
+    start (IntMap m1) (IntMap m2) = IntMap (WM.merge (WM.mapMaybeMissing (single miss1)) (WM.mapMaybeMissing (single miss2)) (WM.zipWithMaybeMatched (matched . w2i)) m1 m2)
 
     single miss k v = case miss (IntMap (WordMap (NonEmpty k v Tip))) of
         IntMap (WordMap Empty) -> Nothing

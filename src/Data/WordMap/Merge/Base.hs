@@ -337,7 +337,7 @@ merge miss1 miss2 match = start where
                Nothing -> case goR1 maxV1 max1 r1 max2 r2 of
                    Empty -> l'
                    NonEmpty max' maxV' r' -> Bin max' maxV' l' r'
-               Just maxV' -> Bin max1 maxV' l' (goR1Keep maxV1 max1 r1 max2 r2)
+               Just maxV' -> Bin max2 maxV' l' (goR1Keep maxV1 max1 r1 max2 r2)
            | otherwise -> case runIdentity (matchedSingle match max1 maxV1 maxV2) of
                Nothing -> case goRFused max1 r1 r2 of
                    Empty -> l'
@@ -472,7 +472,7 @@ merge miss1 miss2 match = start where
                Nothing -> case goL1 minV1 min1 l1 min2 l2 of
                    Empty -> r'
                    NonEmpty min' minV' l' -> Bin min' minV' l' r'
-               Just minV' -> Bin min1 minV' (goL1Keep minV1 min1 l1 min2 l2) r'
+               Just minV' -> Bin min2 minV' (goL1Keep minV1 min1 l1 min2 l2) r'
            | otherwise -> case runIdentity (matchedSingle match min1 minV1 minV2) of
                Nothing -> case goLFused min1 l1 l2 of
                    Empty -> r'
