@@ -23,6 +23,7 @@ library
                         Data.IntMap.Bounded.Base,
                         Data.IntMap.Bounded.Lazy,
                         Data.IntMap.Bounded.Strict
+    Other-Modules: Data.StrictPair
     ghc-options:     -Wall
 
 benchmark intmap
