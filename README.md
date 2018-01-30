@@ -1,6 +1,8 @@
 bounded-intmap
 ==============
 
+The most current work on this is being done in [haskell/containers#340](https://github.com/haskell/containers/pull/340). This repository is not obsolete because it is still the best description of the algorithm, but it is unmaintained.
+
 `bounded-intmap` is a reimplementation of `Data.IntMap` that uses minimum and maximum bounds on subtrees instread of bit prefixes. The original idea, by Edward Kmett, is described [here](https://www.fpcomplete.com/user/edwardk/revisiting-matrix-multiplication/part-4). As per my current benchmark results, this implemenation seems to range from 33% faster to 33% slower than stock `Data.IntMap`. However, only four types of function in the benchmark, `intersection`, `difference`, `fromAscList`, and `foldlWithKey`, are slower than stock `Data.IntMap`, and not all of these are slower in all cases. In comparison, `lookup`, `member`, `map`, `mapMaybe`, `insert`, `delete`, `update`, 'alter', and `union` are all faster than stock `Data.IntMap`. Additionally, this implementation, on GHC, has an overhead of 3 words per key/value pair, while stock `Data.IntMap` has an overhead of 6 words per key/value pair.
 
 I deviate from Edward Kmett's implementation in a couple of ways:
